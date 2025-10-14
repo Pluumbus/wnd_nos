@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
-import { OrderService } from "../services/orderService";
+import { Order, OrderJoin, OrderService } from "../services/orderService";
 import { Database } from "../lib/supabase.types";
 
-type Order = Database["public"]["Tables"]["orders"]["Row"];
-
 export const useOrders = () => {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<OrderJoin>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,43 +25,108 @@ export const useOrders = () => {
     }
   };
 
-  // Создать заказ
-  const createOrder = async (
-    orderData: Omit<Order, "id" | "created_at" | "updated_at">
-  ) => {
-    try {
-      setError(null);
-      const newOrder = await OrderService.createOrder(orderData);
-      setOrders((prev) => [newOrder, ...prev]);
-      return newOrder;
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Произошла ошибка при создании заказа"
-      );
-      throw err;
-    }
-  };
+  // // Создать заказ
+  // const createOrder = async (orderData: Order) => {
+  //   try {
+  //     setError(null);
+  //     const newOrder = await OrderService.createOrder(orderData);
+  //     setOrders((prev) => [
+  //       {
+  //         ...newOrder,
+  //         wnd_constructions: {
+  //           created_at: new Date().toISOString(),
+  //           id: 0,
+  //           furniture: 0,
+  //           opening_sashes: "",
+  //           profileSystem: 0,
+  //           sh_template: "",
+  //           size: {},
+  //           th_glass: null,
+  //           profiles: {
+  //             id: 0,
+  //             name: "",
+  //             description: null,
+  //             created_at: new Date().toISOString(),
+  //           },
+  //           furnitures: {
+  //             id: 0,
+  //             name: "",
+  //             description: null,
+  //             created_at: new Date().toISOString(),
+  //           },
+  //         },
+  //         profiles: {
+  //           id: 0,
+  //           name: "",
+  //           description: null,
+  //           created_at: new Date().toISOString(),
+  //         },
+  //         furnitures: {
+  //           id: 0,
+  //           name: "",
+  //           description: null,
+  //           created_at: new Date().toISOString(),
+  //         },
+  //       },
+  //       ...prev,
+  //     ]);
+  //     return newOrder;
+  //   } catch (err) {
+  //     setError(
+  //       err instanceof Error
+  //         ? err.message
+  //         : "Произошла ошибка при создании заказа"
+  //     );
+  //     throw err;
+  //   }
+  // };
 
   // Обновить заказ
-  const updateOrder = async (id: number, updates: Partial<Order>) => {
-    try {
-      setError(null);
-      const updatedOrder = await OrderService.updateOrder(id, updates);
-      setOrders((prev) =>
-        prev.map((order) => (order.id === id ? updatedOrder : order))
-      );
-      return updatedOrder;
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Произошла ошибка при обновлении заказа"
-      );
-      throw err;
-    }
-  };
+  //   const updateOrder = async (id: number, updates: Partial<Order>) => {
+  //     try {
+  //       setError(null);
+  //       const updatedOrder = await OrderService.updateOrder(id, updates);
+  //       setOrders((prev) =>
+  //         prev.map((order) =>
+  //           order.id === id
+  //             ? {
+  //                 ...updatedOrder,
+  //                 wnd_constructions: {
+  //                   created_at: new Date().toISOString(),
+  //                   id: 0,
+  //                   furniture: 0,
+  //                   opening_sashes: "",
+  //                   profileSystem: 0,
+  //                   sh_template: "",
+  //                   size: {},
+  //                   th_glass: null,
+  //                 },
+  //                 profiles: {
+  //                   id: 0,
+  //                   name: "",
+  //                   description: null,
+  //                   created_at: new Date().toISOString(),
+  //                 },
+  //                 furnitures: {
+  //                   id: 0,
+  //                   name: "",
+  //                   description: null,
+  //                   created_at: new Date().toISOString(),
+  //                 },
+  //               }
+  //             : order
+  //         )
+  //       );
+  //       return updatedOrder;
+  //     } catch (err) {
+  //       setError(
+  //         err instanceof Error
+  //           ? err.message
+  //           : "Произошла ошибка при обновлении заказа"
+  //       );
+  //       throw err;
+  //     }
+  //   };
 
   // Удалить заказ
   const deleteOrder = async (id: number) => {
@@ -112,8 +175,8 @@ export const useOrders = () => {
     loading,
     error,
     loadOrders,
-    createOrder,
-    updateOrder,
+    // createOrder,
+    // updateOrder,
     deleteOrder,
   };
 };

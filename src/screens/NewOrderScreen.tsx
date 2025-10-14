@@ -43,8 +43,41 @@ const NewOrderScreen: React.FC<Props> = ({ navigation }) => {
     handleCancel();
     // Переход к workflow screen с данными клиента
     navigation.navigate("Workflow", {
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+      orderData: {
+        created_at: new Date().toISOString(),
+        creator: "",
+        customer_name: customerName.trim(),
+        id: 0,
+        phone_number: customerPhone.trim(),
+        price: null,
+        status: "Новый",
+        wnd: null,
+        config: 1,
+        wnd_constructions: {
+          created_at: new Date().toISOString(),
+          id: 0,
+          furniture: 0,
+          opening_sashes: "1",
+          profileSystem: 0,
+          sh_template: "single_sash",
+          size: { width: 1200, height: 1400 },
+          th_glass: "24",
+          color: "white",
+          profiles: {
+            id: 0,
+            name: "",
+            created_at: new Date().toISOString(),
+            price: 0,
+          },
+          furnitures: {
+            id: 0,
+            name: "",
+            created_at: new Date().toISOString(),
+            price: 0,
+          },
+        },
+      },
+      isNewOrder: true,
     });
   };
 

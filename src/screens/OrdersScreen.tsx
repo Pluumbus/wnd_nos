@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -14,6 +15,7 @@ import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
 import { useOrders } from "../hooks/useOrders";
 import { Database } from "../lib/supabase.types";
+import { Order, OrderJoin } from "../services/orderService";
 
 type OrdersScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -24,17 +26,15 @@ interface Props {
   navigation: OrdersScreenNavigationProp;
 }
 
-type Order = Database["public"]["Tables"]["orders"]["Row"];
-
 const OrdersScreen: React.FC<Props> = ({ navigation }) => {
   const { isDarkMode, theme } = useTheme();
-  const { orders, loading, error, updateOrder, deleteOrder } = useOrders();
+  const { orders, loading, error, deleteOrder, loadOrders } = useOrders();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleOrderPress = (order: Order) => {
-    console.log(`Opening order: ${order.id}`);
+  const handleOrderPress = (order: OrderJoin[number]) => {
     navigation.navigate("Workflow", {
-      customerName: order.customer_name?.trim() || "",
-      customerPhone: order.phone_number?.trim() || "",
+      orderData: order,
+      isNewOrder: false,
     });
   };
 
@@ -54,7 +54,18 @@ const OrdersScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const handleBackPress = () => {
-    navigation.goBack();
+    navigation.navigate("Home");
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadOrders();
+    } catch (error) {
+      console.error("Error refreshing orders:", error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -90,7 +101,9 @@ const OrdersScreen: React.FC<Props> = ({ navigation }) => {
         ]}
       >
         <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-          <Text style={styles.backButtonText}>← Назад</Text>
+          <Text style={[styles.backButtonText, { color: theme.colors.text }]}>
+            ←
+          </Text>
         </TouchableOpacity>
         <Text
           style={[
@@ -110,13 +123,21 @@ const OrdersScreen: React.FC<Props> = ({ navigation }) => {
       <ScrollView
         style={styles.ordersContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.primary]}
+            tintColor={theme.colors.primary}
+          />
+        }
       >
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={[styles.loadingText, { color: theme.colors.text }]}>
+            {/* <Text style={[styles.loadingText, { color: theme.colors.text }]}>
               Загрузка заказов...
-            </Text>
+            </Text> */}
           </View>
         ) : error ? (
           <View style={styles.errorContainer}>
@@ -159,12 +180,6 @@ const OrdersScreen: React.FC<Props> = ({ navigation }) => {
                 >
                   <Text style={styles.statusText}>{order.status}</Text>
                 </View>
-                {/* <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleDeleteOrder(order)}
-                >
-                  <Text style={styles.deleteButtonText}>❌</Text>
-                </TouchableOpacity> */}
               </View>
 
               <View style={styles.orderDetails}>
@@ -181,6 +196,14 @@ const OrdersScreen: React.FC<Props> = ({ navigation }) => {
                 >
                   {new Date(order.created_at).toLocaleDateString("ru-RU")}
                 </Text>
+                <Text
+                  style={[
+                    styles.orderDate,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Источник: {order.creator}
+                </Text>
               </View>
 
               <View style={styles.orderFooter}>
@@ -188,14 +211,6 @@ const OrdersScreen: React.FC<Props> = ({ navigation }) => {
                   {order.price?.toLocaleString()} Тг
                 </Text>
                 <View style={styles.buttonContainer}>
-                  {/* <TouchableOpacity
-                    style={[
-                      styles.openButton,
-                      { backgroundColor: theme.colors.primary },
-                    ]}
-                  >
-                    <Text style={styles.openButtonText}>Открыть</Text>
-                  </TouchableOpacity> */}
                   <TouchableOpacity
                     style={[
                       styles.deleteButton,
@@ -232,7 +247,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: "#e94560",
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: "600",
   },
   headerTitle: {

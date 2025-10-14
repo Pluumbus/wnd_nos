@@ -1,9 +1,17 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Switch } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Switch,
+  ScrollView,
+} from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
+import { NotificationTest } from "../components/NotificationTest";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -14,18 +22,19 @@ interface Props {
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const { isDarkMode, toggleTheme, theme } = useTheme();
   const handleButtonPress = (index: number) => {
-    console.log(`Button ${index} pressed`);
     if (index === 1) {
       navigation.navigate("NewOrder");
     } else if (index === 2) {
       navigation.navigate("Orders");
+    } else if (index === 5) {
+      navigation.navigate("NotificationTest");
     }
-    // Здесь можно добавить навигацию для других кнопок
   };
 
   return (
-    <View
+    <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={styles.scrollContent}
     >
       <StatusBar style={isDarkMode ? "light" : "dark"} />
 
@@ -107,16 +116,36 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             Настройки
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.button,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+            },
+          ]}
+          onPress={() => handleButtonPress(5)}
+        >
+          <Text style={[styles.buttonText, { color: theme.colors.text }]}>
+            Тест уведомлений
+          </Text>
+        </TouchableOpacity>
       </View>
-    </View>
+
+      {/* Notification Test Component */}
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingVertical: 20,
   },
   themeToggleContainer: {
     position: "absolute",
