@@ -1,7 +1,7 @@
 import { supabase } from "../lib/supabase";
 import { Database } from "../lib/supabase.types";
 import { SupabaseNotificationService } from "./supabaseNotificationService";
-import { WindowConfig } from "../components/WindowVisualizer";
+import { WindowConfig, WindowSection } from "../components/WindowVisualizer";
 
 export type Order = Database["public"]["Tables"]["orders"]["Row"];
 export type WndConstruction =
@@ -10,12 +10,15 @@ export type WndConstructionInsert =
   Database["public"]["Tables"]["wnd_constructions"]["Insert"];
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export type Furniture = Database["public"]["Tables"]["furnitures"]["Row"];
+export type WndSection = Database["public"]["Tables"]["wnd_sections"]["Row"];
+export type WndSectionInsert = Database["public"]["Tables"]["wnd_sections"]["Insert"];
 
 // Исправленный тип для единичного заказа с джойнами
 export type OrderWithJoins = Order & {
   wnd_constructions: WndConstruction & {
     profiles: Profile;
     furnitures: Furniture;
+    wnd_sections?: WndSection[];
   };
 };
 
@@ -45,6 +48,7 @@ export interface OrderWithConfig {
     profileId: number;
     furnitureId: number;
     color?: string;
+    sections?: WindowSection[];
   };
 }
 
@@ -60,7 +64,8 @@ export class OrderService {
           wnd_constructions (
             *,
             profiles (*),
-            furnitures (*)
+            furnitures (*),
+            wnd_sections (*)
           )
         `
         )
@@ -160,6 +165,36 @@ export class OrderService {
         throw wndError;
       }
 
+      // Создаем секции окна, если они есть
+      if (orderData.windowConfig.sections && orderData.windowConfig.sections.length > 0) {
+        const sectionsData: WndSectionInsert[] = orderData.windowConfig.sections.map(
+          (section) => ({
+            wnd_construction_id: wndConstruction.id,
+            section_id: section.id,
+            width_mm: section.widthMM || null,
+            height_mm: section.heightMM || null,
+            opening_side: section.openingSide || null,
+            opening_type: section.openingType || null,
+            has_handle: section.hasHandle || false,
+          })
+        );
+
+        const { error: sectionsError } = await supabase
+          .from("wnd_sections")
+          .insert(sectionsData);
+
+        if (sectionsError) {
+          // Если секции не создались, удаляем конфигурацию окна
+          await supabase
+            .from("wnd_constructions")
+            .delete()
+            .eq("id", wndConstruction.id);
+
+          console.error("Error creating window sections:", sectionsError);
+          throw sectionsError;
+        }
+      }
+
       // Создаем заказ со ссылкой на конфигурацию окна
       const orderInsertData: OrderInsert = {
         customer_name: orderData.customer_name,
@@ -178,7 +213,7 @@ export class OrderService {
         .single();
 
       if (orderError) {
-        // Если заказ не создался, удаляем созданную конфигурацию окна
+        // Если заказ не создался, удаляем созданную конфигурацию окна (секции удалятся каскадно)
         await supabase
           .from("wnd_constructions")
           .delete()
@@ -197,7 +232,8 @@ export class OrderService {
           wnd_constructions (
             *,
             profiles (*),
-            furnitures (*)
+            furnitures (*),
+            wnd_sections (*)
           )
         `
         )
@@ -352,6 +388,7 @@ export class OrderService {
       price?: number;
       config?: number;
       color?: string;
+      sections?: WindowSection[];
     }
   ): Promise<OrderWithJoins> {
     try {
@@ -396,6 +433,44 @@ export class OrderService {
         throw wndError;
       }
 
+      // Обновляем секции окна: удаляем старые и вставляем новые
+      if (configData.sections !== undefined) {
+        // Удаляем старые секции
+        const { error: deleteError } = await supabase
+          .from("wnd_sections")
+          .delete()
+          .eq("wnd_construction_id", order.wnd);
+
+        if (deleteError) {
+          console.error("Error deleting old sections:", deleteError);
+          throw deleteError;
+        }
+
+        // Вставляем новые секции
+        if (configData.sections.length > 0) {
+          const sectionsData: WndSectionInsert[] = configData.sections.map(
+            (section) => ({
+              wnd_construction_id: order.wnd!,
+              section_id: section.id,
+              width_mm: section.widthMM || null,
+              height_mm: section.heightMM || null,
+              opening_side: section.openingSide || null,
+              opening_type: section.openingType || null,
+              has_handle: section.hasHandle || false,
+            })
+          );
+
+          const { error: sectionsError } = await supabase
+            .from("wnd_sections")
+            .insert(sectionsData);
+
+          if (sectionsError) {
+            console.error("Error inserting new sections:", sectionsError);
+            throw sectionsError;
+          }
+        }
+      }
+
       // Обновляем цену и конфигурацию заказа, если они переданы
       const orderUpdates: any = {};
       if (configData.price !== undefined) {
@@ -426,7 +501,8 @@ export class OrderService {
           wnd_constructions (
             *,
             profiles (*),
-            furnitures (*)
+            furnitures (*),
+            wnd_sections (*)
           )
         `
         )

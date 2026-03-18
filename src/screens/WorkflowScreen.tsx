@@ -17,15 +17,24 @@ import { useTheme } from "../context/ThemeContext";
 import WindowVisualizer, { WindowConfig } from "../components/WindowVisualizer";
 import WindowConfigSelector from "../components/WindowConfigSelector";
 import ColorSelector from "../components/ColorSelector";
+import WindowEditorModal from "../components/WindowEditorModal";
 import { openingSashesTypes } from "../utils/opening_sashes.dict";
 import { windowTemplates } from "../utils/window_templates.dict";
+import { OrderService, OrderWithConfig } from "../services/orderService";
 import {
-  OrderService,
-  OrderWithConfig,
+  PriceService,
   Profile,
-  Furniture,
-} from "../services/orderService";
+  GlassPackage,
+  FurnitureSystem,
+  FurnitureItem,
+  Handle,
+} from "../services/priceService";
 import { RouteProp } from "@react-navigation/native";
+import {
+  calculateWindowPrice,
+  PriceBreakdown,
+  WindowPriceConfig,
+} from "../utils/priceCalculator";
 
 type WorkflowScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -43,6 +52,23 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
   const { orderData, isNewOrder } = route.params;
   const [orderStatus, setOrderStatus] = useState(orderData.status);
 
+  // Преобразование секций из БД в формат WindowSection
+  const loadSectionsFromDB = () => {
+    //@ts-ignore
+    const dbSections = orderData.wnd_constructions?.wnd_sections;
+    if (!dbSections || !Array.isArray(dbSections)) {
+      return undefined;
+    }
+    return dbSections.map((s: any) => ({
+      id: s.section_id,
+      widthMM: s.width_mm || undefined,
+      heightMM: s.height_mm || undefined,
+      openingSide: s.opening_side || undefined,
+      openingType: s.opening_type || undefined,
+      hasHandle: s.has_handle || false,
+    }));
+  };
+
   // Состояние для конфигурации окна
   const initialConfig: WindowConfig = {
     //@ts-ignore
@@ -57,6 +83,7 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
     furnitureType: "",
     config: orderData.config || 1, // По умолчанию конфигурация 1
     color: orderData.wnd_constructions.color || "white",
+    sections: loadSectionsFromDB(),
   };
 
   const [windowConfig, setWindowConfig] = useState<WindowConfig>(initialConfig);
@@ -65,26 +92,38 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
   const [originalProfileId, setOriginalProfileId] = useState<number | null>(
     orderData.wnd_constructions.profiles?.id || null
   );
-  const [originalFurnitureId, setOriginalFurnitureId] = useState<number | null>(
-    orderData.wnd_constructions.furnitures?.id || null
-  );
+  const [originalFurnitureSystemId, setOriginalFurnitureSystemId] = useState<number | null>(null);
 
   // Состояние для отслеживания размеров экрана и ориентации
   const [screenData, setScreenData] = useState(Dimensions.get("window"));
   const isLandscape = screenData.width > screenData.height;
 
-  // Состояния для списков профилей и фурнитуры
+  // Состояния для списков справочников
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [furnitures, setFurnitures] = useState<Furniture[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState<number | null>(
-    null
-  );
-  const [selectedFurnitureId, setSelectedFurnitureId] = useState<number | null>(
-    null
-  );
-  const [funkeProfileDepth, setFunkeProfileDepth] = useState<"58" | "70">("58"); // Толщина профиля FUNKE (для UI)
+  const [furnitureSystems, setFurnitureSystems] = useState<FurnitureSystem[]>([]);
+  const [furnitureItems, setFurnitureItems] = useState<FurnitureItem[]>([]);
+  const [glassPackages, setGlassPackages] = useState<GlassPackage[]>([]);
+  const [handles, setHandles] = useState<Handle[]>([]);
+  
+  // Состояния для выбранных элементов
+  const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
+  const [selectedFurnitureSystemId, setSelectedFurnitureSystemId] = useState<number | null>(null);
+  const [selectedGlassPackageId, setSelectedGlassPackageId] = useState<number | null>(null);
+  const [selectedHandleId, setSelectedHandleId] = useState<number | null>(null);
+  
+  // Группировка профилей по системам
+  const [profileSystems, setProfileSystems] = useState<string[]>([]);
+  const [selectedProfileSystem, setSelectedProfileSystem] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [editorModalVisible, setEditorModalVisible] = useState(false);
+  const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown | null>(
+    null
+  );
+  const [showPriceDetails, setShowPriceDetails] = useState(false);
+  const [manualPriceOverride, setManualPriceOverride] = useState<number | null>(
+    null
+  );
 
   // Состояние для sticky визуализатора
   const [showStickyVisualizer, setShowStickyVisualizer] = useState(false);
@@ -92,22 +131,44 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const stickyOpacity = useRef(new Animated.Value(0)).current;
 
-  // Загрузка профилей и фурнитуры
+  // Загрузка справочников через PriceService
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const [profilesData, furnituresData] = await Promise.all([
-          OrderService.getProfiles(),
-          OrderService.getFurnitures(),
+        const [
+          profilesData,
+          furnitureSystemsData,
+          furnitureItemsData,
+          glassPackagesData,
+          handlesData,
+        ] = await Promise.all([
+          PriceService.getProfiles(),
+          PriceService.getFurnitureSystems(),
+          PriceService.getFurnitureItems(),
+          PriceService.getGlassPackages(),
+          PriceService.getHandles(),
         ]);
+        
         setProfiles(profilesData);
-        setFurnitures(furnituresData);
+        setFurnitureSystems(furnitureSystemsData);
+        setFurnitureItems(furnitureItemsData);
+        setGlassPackages(glassPackagesData);
+        setHandles(handlesData);
+        
+        // Группируем профили по системам
+        const systems = [...new Set(profilesData.map(p => p.system_name).filter(Boolean))] as string[];
+        setProfileSystems(systems);
+        
+        // Устанавливаем первую систему по умолчанию
+        if (systems.length > 0 && !selectedProfileSystem) {
+          setSelectedProfileSystem(systems[0]);
+        }
       } catch (error) {
-        console.error("Error loading profiles and furnitures:", error);
+        console.error("Error loading data:", error);
         Alert.alert(
           "Ошибка",
-          "Не удалось загрузить данные профилей и фурнитуры"
+          "Не удалось загрузить данные справочников"
         );
       } finally {
         setIsLoading(false);
@@ -135,20 +196,19 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
       windowConfig.height !== originalConfig.height ||
       windowConfig.glassThickness !== originalConfig.glassThickness ||
       windowConfig.openingSashType !== originalConfig.openingSashType ||
-      windowConfig.shTemplate !== originalConfig.shTemplate ||
       windowConfig.price !== originalConfig.price ||
       windowConfig.config !== originalConfig.config ||
       windowConfig.color !== originalConfig.color;
 
     const profileChanged = selectedProfileId !== originalProfileId;
-    const furnitureChanged = selectedFurnitureId !== originalFurnitureId;
+    const furnitureChanged = selectedFurnitureSystemId !== originalFurnitureSystemId;
 
     return configChanged || profileChanged || furnitureChanged;
   };
 
   // Предзаполнение данных из заказа
   useEffect(() => {
-    if (orderData && profiles.length > 0 && furnitures.length > 0) {
+    if (orderData && profiles.length > 0 && furnitureSystems.length > 0) {
       const updatedConfig = {
         ...initialConfig,
         openingSashType: orderData.wnd_constructions.opening_sashes || "1",
@@ -161,24 +221,105 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
       setWindowConfig(updatedConfig);
       setOriginalConfig(updatedConfig);
 
-      // Устанавливаем выбранные ID
+      // Устанавливаем выбранный профиль и его систему
       if (orderData.wnd_constructions.profiles?.id) {
+        const profile = profiles.find(p => p.id === orderData.wnd_constructions.profiles?.id);
         setSelectedProfileId(orderData.wnd_constructions.profiles.id);
         setOriginalProfileId(orderData.wnd_constructions.profiles.id);
-
-        // Определяем толщину FUNKE на основе ID профиля
-        if (orderData.wnd_constructions.profiles.id === 1) {
-          setFunkeProfileDepth("58");
-        } else if (orderData.wnd_constructions.profiles.id === 5) {
-          setFunkeProfileDepth("70");
+        
+        if (profile?.system_name) {
+          setSelectedProfileSystem(profile.system_name);
         }
       }
+      
+      // Устанавливаем выбранную систему фурнитуры
       if (orderData.wnd_constructions.furnitures?.id) {
-        setSelectedFurnitureId(orderData.wnd_constructions.furnitures.id);
-        setOriginalFurnitureId(orderData.wnd_constructions.furnitures.id);
+        // Находим систему фурнитуры по коду
+        const furnitureCode = orderData.wnd_constructions.furnitures?.system_code;
+        if (furnitureCode) {
+          const system = furnitureSystems.find(s => s.code === furnitureCode);
+          if (system) {
+            setSelectedFurnitureSystemId(system.id);
+            setOriginalFurnitureSystemId(system.id);
+          }
+        }
       }
     }
-  }, [orderData, profiles, furnitures]);
+  }, [orderData, profiles, furnitureSystems]);
+
+  // Автоматический расчет цены при изменении параметров
+  useEffect(() => {
+    if (
+      selectedProfileId &&
+      selectedFurnitureSystemId &&
+      windowConfig.width > 0 &&
+      windowConfig.height > 0 &&
+      profiles.length > 0 &&
+      furnitureSystems.length > 0
+    ) {
+      const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
+      const selectedFurnitureSystem = furnitureSystems.find(
+        (f) => f.id === selectedFurnitureSystemId
+      );
+
+      if (selectedProfile && selectedFurnitureSystem) {
+        // Получаем системы напрямую из данных
+        const profileSystemId = selectedProfile.system_name || "FUNKE";
+        const furnitureSystemCode = selectedFurnitureSystem.code;
+
+        const priceConfig: WindowPriceConfig = {
+          width: windowConfig.width,
+          height: windowConfig.height,
+          profile: selectedProfile,
+          profileSystemId: profileSystemId,
+          furniture: { 
+            id: selectedFurnitureSystem.id, 
+            name: selectedFurnitureSystem.name, 
+            price: 0, 
+            created_at: "",
+            code: selectedFurnitureSystem.code,
+            system_code: selectedFurnitureSystem.code,
+          },
+          furnitureSystemCode: furnitureSystemCode,
+          glassThickness: windowConfig.glassThickness || 36,
+          openingSashType: windowConfig.openingSashType,
+          shTemplate: windowConfig.shTemplate,
+          color: windowConfig.color,
+          config: windowConfig.config,
+          // Дополнительные опции
+          hasMosquitoNet: false,
+          mosquitoNetColor: "white",
+          reinforcementLZ: "1.2", // Армирование LZ 1.2 мм по умолчанию
+          reinforcementT: "1.5", // Армирование T 1.5 мм по умолчанию
+          hasBalconyLatch: false,
+          hasMicroVentilation: false,
+          hasHandle: true,
+          hasBalconyHandle: false,
+        };
+
+        const breakdown = calculateWindowPrice(priceConfig);
+        setPriceBreakdown(breakdown);
+
+        // Обновляем цену в конфигурации, если нет ручного переопределения
+        if (manualPriceOverride === null) {
+          updateWindowConfig("price", breakdown.total);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    selectedProfileId,
+    selectedFurnitureSystemId,
+    windowConfig.width,
+    windowConfig.height,
+    windowConfig.glassThickness,
+    windowConfig.openingSashType,
+    windowConfig.shTemplate,
+    windowConfig.color,
+    windowConfig.config,
+    profiles,
+    furnitureSystems,
+  ]);
 
   // Обработчики изменения параметров
   const updateWindowConfig = (field: keyof WindowConfig, value: any) => {
@@ -193,21 +334,25 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
     try {
       setIsSaving(true);
 
-      // Проверяем что выбраны профиль и фурнитура
-      if (!selectedProfileId || !selectedFurnitureId) {
+      // Проверяем что выбраны профиль и система фурнитуры
+      if (!selectedProfileId || !selectedFurnitureSystemId) {
         Alert.alert("Ошибка", "Пожалуйста, выберите профиль и фурнитуру");
         return;
       }
 
       const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
-      const selectedFurniture = furnitures.find(
-        (f) => f.id === selectedFurnitureId
+      const selectedFurnitureSystem = furnitureSystems.find(
+        (f) => f.id === selectedFurnitureSystemId
       );
 
-      if (!selectedProfile || !selectedFurniture) {
+      if (!selectedProfile || !selectedFurnitureSystem) {
         Alert.alert("Ошибка", "Выбранные профиль или фурнитура не найдены");
         return;
       }
+
+      // Для совместимости со старой структурой, находим или создаём furnitureId
+      // Используем ID системы фурнитуры как furnitureId
+      const furnitureId = selectedFurnitureSystem.id;
 
       if (isNewOrder) {
         // Создаем новый заказ
@@ -225,8 +370,9 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
             openingSashType: windowConfig.openingSashType,
             shTemplate: windowConfig.shTemplate,
             profileId: selectedProfile.id,
-            furnitureId: selectedFurniture.id,
+            furnitureId: furnitureId,
             color: windowConfig.color || "white",
+            sections: windowConfig.sections,
           },
         };
 
@@ -246,10 +392,11 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
           openingSashType: windowConfig.openingSashType,
           shTemplate: windowConfig.shTemplate,
           profileId: selectedProfile.id,
-          furnitureId: selectedFurniture.id,
+          furnitureId: furnitureId,
           price: windowConfig.price,
           config: windowConfig.config || 0,
           color: windowConfig.color || "white",
+          sections: windowConfig.sections,
         };
 
         await OrderService.updateOrderConfig(orderData.id, updateData);
@@ -397,9 +544,27 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
           style={[styles.section, { backgroundColor: theme.colors.surface }]}
           onLayout={onVisualizerLayout}
         >
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Визуализация окна
-          </Text>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 15,
+            }}
+          >
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Визуализация окна
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.expandButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={() => setEditorModalVisible(true)}
+            >
+              <Text style={styles.expandButtonText}>Редактировать</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.visualizerContainer}>
             <WindowVisualizer
               config={windowConfig}
@@ -502,6 +667,42 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
             />
           </View>
 
+          {/* Шаблон окна (статичное значение из базы) */}
+          <View style={styles.parameterRow}>
+            <Text
+              style={[
+                styles.parameterLabel,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              Шаблон окна:
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.selectorButton,
+                {
+                  backgroundColor: theme.colors.background,
+                  borderColor: theme.colors.textSecondary,
+                  opacity: 0.6,
+                },
+              ]}
+              disabled={true}
+            >
+              <Text
+                style={[
+                  styles.selectorText,
+                  {
+                    color: theme.colors.textSecondary,
+                  },
+                ]}
+              >
+                {windowTemplates[
+                  windowConfig.shTemplate as keyof typeof windowTemplates
+                ] || windowConfig.shTemplate}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Тип створок */}
           <View style={styles.parameterColumn}>
             <Text
@@ -550,7 +751,7 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
             </ScrollView>
           </View>
 
-          {/* Выбор шаблона окна */}
+          {/* Выбор системы профиля */}
           <View style={styles.parameterColumn}>
             <Text
               style={[
@@ -558,55 +759,7 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
                 { color: theme.colors.textSecondary, marginBottom: 10 },
               ]}
             >
-              Шаблон окна:
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.selectorContainer}
-            >
-              {Object.entries(windowTemplates).map(([key, value]) => (
-                <TouchableOpacity
-                  key={key}
-                  style={[
-                    styles.selectorButton,
-                    {
-                      backgroundColor:
-                        windowConfig.shTemplate === key
-                          ? "#9C27B0"
-                          : theme.colors.background,
-                      borderColor: theme.colors.textSecondary,
-                    },
-                  ]}
-                  onPress={() => updateWindowConfig("shTemplate", key)}
-                >
-                  <Text
-                    style={[
-                      styles.selectorText,
-                      {
-                        color:
-                          windowConfig.shTemplate === key
-                            ? "white"
-                            : theme.colors.text,
-                      },
-                    ]}
-                  >
-                    {value}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Выбор профиля */}
-          <View style={styles.parameterColumn}>
-            <Text
-              style={[
-                styles.parameterLabel,
-                { color: theme.colors.textSecondary, marginBottom: 10 },
-              ]}
-            >
-              Профиль:
+              Система профиля:
             </Text>
             {isLoading ? (
               <Text
@@ -623,158 +776,104 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
                 showsHorizontalScrollIndicator={false}
                 style={styles.selectorContainer}
               >
-                {profiles
-                  .filter((profile, index, self) => {
-                    // Группируем FUNKE профили - показываем только один "FUNKE"
-                    const profileName = profile.name?.toUpperCase() || "";
-                    if (profileName.includes("FUNKE")) {
-                      // Показываем только первый FUNKE профиль в списке
-                      return (
-                        self.findIndex((p) =>
-                          p.name?.toUpperCase().includes("FUNKE")
-                        ) === index
-                      );
-                    }
-                    return true;
-                  })
-                  .map((profile) => {
-                    const isFunke = profile.name
-                      ?.toUpperCase()
-                      .includes("FUNKE");
-                    const isSelected = isFunke
-                      ? selectedProfileId === 1 || selectedProfileId === 5
-                      : selectedProfileId === profile.id;
-
-                    return (
-                      <TouchableOpacity
-                        key={profile.id}
-                        style={[
-                          styles.selectorButton,
-                          {
-                            backgroundColor: isSelected
-                              ? "#4CAF50"
-                              : theme.colors.background,
-                            borderColor: theme.colors.textSecondary,
-                          },
-                        ]}
-                        onPress={() => {
-                          if (isFunke) {
-                            // Для FUNKE устанавливаем ID на основе выбранной толщины
-                            const funkeId = funkeProfileDepth === "58" ? 1 : 5;
-                            setSelectedProfileId(funkeId);
-                            updateWindowConfig("profileType", profile.name);
-                          } else {
-                            setSelectedProfileId(profile.id);
-                            updateWindowConfig("profileType", profile.name);
-                          }
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.selectorText,
-                            {
-                              color: isSelected ? "white" : theme.colors.text,
-                            },
-                          ]}
-                        >
-                          {isFunke ? "FUNKE" : profile.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                {profileSystems.map((system) => (
+                  <TouchableOpacity
+                    key={system}
+                    style={[
+                      styles.selectorButton,
+                      {
+                        backgroundColor:
+                          selectedProfileSystem === system
+                            ? "#4CAF50"
+                            : theme.colors.background,
+                        borderColor: theme.colors.textSecondary,
+                      },
+                    ]}
+                    onPress={() => {
+                      setSelectedProfileSystem(system);
+                      // Выбираем первый профиль этой системы по умолчанию
+                      const firstProfile = profiles.find(p => p.system_name === system);
+                      if (firstProfile) {
+                        setSelectedProfileId(firstProfile.id);
+                        updateWindowConfig("profileType", firstProfile.name);
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.selectorText,
+                        {
+                          color:
+                            selectedProfileSystem === system
+                              ? "white"
+                              : theme.colors.text,
+                        },
+                      ]}
+                    >
+                      {system}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </ScrollView>
             )}
           </View>
 
-          {/* Выбор толщины профиля FUNKE */}
-          {selectedProfileId &&
-            profiles
-              .find((p) => p.id === selectedProfileId)
-              ?.name?.toUpperCase()
-              .includes("FUNKE") && (
-              <View style={styles.parameterColumn}>
-                <Text
-                  style={[
-                    styles.parameterLabel,
-                    { color: theme.colors.textSecondary, marginBottom: 10 },
-                  ]}
-                >
-                  Толщина профиля FUNKE:
-                </Text>
-                <View style={styles.funkeDepthContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.funkeDepthButton,
-                      {
-                        backgroundColor:
-                          funkeProfileDepth === "58"
-                            ? "#4CAF50"
-                            : theme.colors.background,
-                        borderColor: theme.colors.textSecondary,
-                      },
-                    ]}
-                    onPress={() => {
-                      setFunkeProfileDepth("58");
-                      setSelectedProfileId(1); // FUNKE 58mm имеет ID = 1
-                      const funkeProfile = profiles.find((p) => p.id === 1);
-                      if (funkeProfile) {
-                        updateWindowConfig("profileType", funkeProfile.name);
-                      }
-                    }}
-                  >
-                    <Text
+          {/* Выбор глубины профиля */}
+          {selectedProfileSystem && (
+            <View style={styles.parameterColumn}>
+              <Text
+                style={[
+                  styles.parameterLabel,
+                  { color: theme.colors.textSecondary, marginBottom: 10 },
+                ]}
+              >
+                Глубина профиля:
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.selectorContainer}
+              >
+                {profiles
+                  .filter(p => p.system_name === selectedProfileSystem)
+                  .map((profile) => (
+                    <TouchableOpacity
+                      key={profile.id}
                       style={[
-                        styles.selectorText,
+                        styles.selectorButton,
                         {
-                          color:
-                            funkeProfileDepth === "58"
-                              ? "white"
-                              : theme.colors.text,
+                          backgroundColor:
+                            selectedProfileId === profile.id
+                              ? "#4CAF50"
+                              : theme.colors.background,
+                          borderColor: theme.colors.textSecondary,
                         },
                       ]}
+                      onPress={() => {
+                        setSelectedProfileId(profile.id);
+                        updateWindowConfig("profileType", profile.name);
+                      }}
                     >
-                      58 мм
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.funkeDepthButton,
-                      {
-                        backgroundColor:
-                          funkeProfileDepth === "70"
-                            ? "#4CAF50"
-                            : theme.colors.background,
-                        borderColor: theme.colors.textSecondary,
-                      },
-                    ]}
-                    onPress={() => {
-                      setFunkeProfileDepth("70");
-                      setSelectedProfileId(5); // FUNKE 70mm имеет ID = 5
-                      const funkeProfile = profiles.find((p) => p.id === 5);
-                      if (funkeProfile) {
-                        updateWindowConfig("profileType", funkeProfile.name);
-                      }
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.selectorText,
-                        {
-                          color:
-                            funkeProfileDepth === "70"
-                              ? "white"
-                              : theme.colors.text,
-                        },
-                      ]}
-                    >
-                      70 мм
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
+                      <Text
+                        style={[
+                          styles.selectorText,
+                          {
+                            color:
+                              selectedProfileId === profile.id
+                                ? "white"
+                                : theme.colors.text,
+                          },
+                        ]}
+                      >
+                        {profile.depth ? `${profile.depth} мм` : profile.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+              </ScrollView>
+            </View>
+          )}
 
-          {/* Выбор фурнитуры */}
+          {/* Выбор системы фурнитуры */}
           <View style={styles.parameterColumn}>
             <Text
               style={[
@@ -799,22 +898,22 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
                 showsHorizontalScrollIndicator={false}
                 style={styles.selectorContainer}
               >
-                {furnitures.map((furniture) => (
+                {furnitureSystems.map((system) => (
                   <TouchableOpacity
-                    key={furniture.id}
+                    key={system.id}
                     style={[
                       styles.selectorButton,
                       {
                         backgroundColor:
-                          selectedFurnitureId === furniture.id
+                          selectedFurnitureSystemId === system.id
                             ? "#FF9800"
                             : theme.colors.background,
                         borderColor: theme.colors.textSecondary,
                       },
                     ]}
                     onPress={() => {
-                      setSelectedFurnitureId(furniture.id);
-                      updateWindowConfig("furnitureType", furniture.name);
+                      setSelectedFurnitureSystemId(system.id);
+                      updateWindowConfig("furnitureType", system.name);
                     }}
                   >
                     <Text
@@ -822,13 +921,90 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
                         styles.selectorText,
                         {
                           color:
-                            selectedFurnitureId === furniture.id
+                            selectedFurnitureSystemId === system.id
                               ? "white"
                               : theme.colors.text,
                         },
                       ]}
                     >
-                      {furniture.name}
+                      {system.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+          
+          {/* Выбор стеклопакета */}
+          <View style={styles.parameterColumn}>
+            <Text
+              style={[
+                styles.parameterLabel,
+                { color: theme.colors.textSecondary, marginBottom: 10 },
+              ]}
+            >
+              Стеклопакет:
+            </Text>
+            {isLoading ? (
+              <Text
+                style={[
+                  styles.loadingText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Загрузка...
+              </Text>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.selectorContainer}
+              >
+                {glassPackages.map((glass) => (
+                  <TouchableOpacity
+                    key={glass.id}
+                    style={[
+                      styles.selectorButton,
+                      {
+                        backgroundColor:
+                          selectedGlassPackageId === glass.id
+                            ? "#9C27B0"
+                            : theme.colors.background,
+                        borderColor: theme.colors.textSecondary,
+                        minWidth: 100,
+                      },
+                    ]}
+                    onPress={() => {
+                      setSelectedGlassPackageId(glass.id);
+                      updateWindowConfig("glassThickness", glass.thickness);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.selectorText,
+                        {
+                          color:
+                            selectedGlassPackageId === glass.id
+                              ? "white"
+                              : theme.colors.text,
+                          fontSize: 12,
+                        },
+                      ]}
+                    >
+                      {glass.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.selectorSubtext,
+                        {
+                          color:
+                            selectedGlassPackageId === glass.id
+                              ? "rgba(255,255,255,0.8)"
+                              : theme.colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {glass.thickness} мм
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -859,39 +1035,281 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
             </Text>
           </View>
 
-          {/* Расчетная площадь */}
+          {/* Расчетная цена */}
           <View
             style={[
               styles.calculatedArea,
               { borderColor: theme.colors.textSecondary },
             ]}
           >
-            <Text
-              style={[styles.areaLabel, { color: theme.colors.textSecondary }]}
-            >
-              Цена:
-            </Text>
-            {/* <Text style={[styles.areaValue, { color: theme.colors.text }]}>
-              {orderData.price} тг
-            </Text> */}
-            <TextInput
-              style={[
-                styles.parameterInput,
-                {
-                  backgroundColor: theme.colors.background,
-                  color: theme.colors.text,
-                  borderColor: theme.colors.textSecondary,
-                },
-              ]}
-              value={windowConfig.price.toString()}
-              onChangeText={(text) =>
-                updateWindowConfig("price", parseInt(text) || 0)
-              }
-              keyboardType="numeric"
-              placeholder="24"
-              placeholderTextColor={theme.colors.textSecondary}
-            />
+            <View style={styles.priceHeader}>
+              <Text
+                style={[
+                  styles.areaLabel,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Итоговая цена:
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowPriceDetails(!showPriceDetails)}
+              >
+                <Text
+                  style={[
+                    styles.detailsToggle,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  {showPriceDetails ? "Скрыть" : "Детали"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.priceValueContainer}>
+              <TextInput
+                style={[
+                  styles.priceInput,
+                  {
+                    backgroundColor: theme.colors.background,
+                    color: theme.colors.text,
+                    borderColor: theme.colors.textSecondary,
+                  },
+                ]}
+                value={windowConfig.price.toFixed(2)}
+                onChangeText={(text) => {
+                  const newPrice = parseFloat(text) || 0;
+                  setManualPriceOverride(newPrice);
+                  updateWindowConfig("price", newPrice);
+                }}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor={theme.colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.currencyLabel,
+                  { color: theme.colors.text, marginLeft: 10 },
+                ]}
+              >
+                тг
+              </Text>
+              {manualPriceOverride !== null && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setManualPriceOverride(null);
+                    if (priceBreakdown) {
+                      updateWindowConfig("price", priceBreakdown.total);
+                    }
+                  }}
+                  style={styles.resetPriceButton}
+                >
+                  <Text
+                    style={[
+                      styles.resetPriceText,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Авто
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
+
+          {/* Детализация цены */}
+          {showPriceDetails && priceBreakdown && (
+            <View
+              style={[
+                styles.priceDetailsContainer,
+                { backgroundColor: theme.colors.background },
+              ]}
+            >
+              <Text
+                style={[styles.priceDetailsTitle, { color: theme.colors.text }]}
+              >
+                Детализация цены:
+              </Text>
+              <View style={styles.priceDetailRow}>
+                <Text
+                  style={[
+                    styles.priceDetailLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Профиль (рама + створка):
+                </Text>
+                <Text
+                  style={[
+                    styles.priceDetailValue,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  {priceBreakdown.profilePrice.toFixed(0)} тг
+                </Text>
+              </View>
+              {priceBreakdown.impostPrice > 0 && (
+                <View style={styles.priceDetailRow}>
+                  <Text
+                    style={[
+                      styles.priceDetailLabel,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Импосты:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.priceDetailValue,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {priceBreakdown.impostPrice.toFixed(0)} тг
+                  </Text>
+                </View>
+              )}
+              <View style={styles.priceDetailRow}>
+                <Text
+                  style={[
+                    styles.priceDetailLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Стеклопакет:
+                </Text>
+                <Text
+                  style={[
+                    styles.priceDetailValue,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  {priceBreakdown.glassPrice.toFixed(0)} тг
+                </Text>
+              </View>
+              <View style={styles.priceDetailRow}>
+                <Text
+                  style={[
+                    styles.priceDetailLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Фурнитура:
+                </Text>
+                <Text
+                  style={[
+                    styles.priceDetailValue,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  {priceBreakdown.furniturePrice.toFixed(0)} тг
+                </Text>
+              </View>
+              {priceBreakdown.handlePrice > 0 && (
+                <View style={styles.priceDetailRow}>
+                  <Text
+                    style={[
+                      styles.priceDetailLabel,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Ручка:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.priceDetailValue,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {priceBreakdown.handlePrice.toFixed(0)} тг
+                  </Text>
+                </View>
+              )}
+              {priceBreakdown.reinforcementPrice > 0 && (
+                <View style={styles.priceDetailRow}>
+                  <Text
+                    style={[
+                      styles.priceDetailLabel,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Армирование:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.priceDetailValue,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {priceBreakdown.reinforcementPrice.toFixed(0)} тг
+                  </Text>
+                </View>
+              )}
+              {priceBreakdown.mosquitoNetPrice > 0 && (
+                <View style={styles.priceDetailRow}>
+                  <Text
+                    style={[
+                      styles.priceDetailLabel,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Москитная сетка:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.priceDetailValue,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {priceBreakdown.mosquitoNetPrice.toFixed(0)} тг
+                  </Text>
+                </View>
+              )}
+              {priceBreakdown.optionsPrice > 0 && (
+                <View style={styles.priceDetailRow}>
+                  <Text
+                    style={[
+                      styles.priceDetailLabel,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Доп. опции:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.priceDetailValue,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {priceBreakdown.optionsPrice.toFixed(0)} тг
+                  </Text>
+                </View>
+              )}
+              <View
+                style={[
+                  styles.priceDetailRow,
+                  styles.priceDetailRowTotal,
+                  { borderTopColor: theme.colors.textSecondary },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.priceDetailLabel,
+                    styles.priceDetailLabelTotal,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  Итого:
+                </Text>
+                <Text
+                  style={[
+                    styles.priceDetailValue,
+                    styles.priceDetailValueTotal,
+                    { color: theme.colors.text },
+                  ]}
+                >
+                  {priceBreakdown.total.toFixed(0)} тг
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Actions */}
@@ -952,6 +1370,16 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
           />
         </Animated.View>
       )}
+
+      {/* Window Editor Modal */}
+      <WindowEditorModal
+        visible={editorModalVisible}
+        onClose={() => setEditorModalVisible(false)}
+        config={windowConfig}
+        onConfigChange={(newConfig) => {
+          setWindowConfig(newConfig);
+        }}
+      />
     </View>
   );
 };
@@ -1139,19 +1567,100 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   calculatedArea: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     marginTop: 20,
     paddingTop: 15,
     borderTopWidth: 1,
+  },
+  priceHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
   },
   areaLabel: {
     fontSize: 18,
     fontWeight: "600",
   },
+  detailsToggle: {
+    fontSize: 14,
+    textDecorationLine: "underline",
+  },
+  priceValueContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  priceInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    fontSize: 18,
+    fontWeight: "600",
+    textAlign: "right",
+  },
+  currencyLabel: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  resetPriceButton: {
+    marginLeft: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 5,
+    backgroundColor: "#E0E0E0",
+  },
+  resetPriceText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
   areaValue: {
     fontSize: 20,
+    fontWeight: "bold",
+  },
+  priceDetailsContainer: {
+    marginTop: 15,
+    padding: 15,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  priceDetailsTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 10,
+  },
+  priceDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 5,
+  },
+  priceDetailRowSubtotal: {
+    borderTopWidth: 1,
+    paddingTop: 10,
+    marginTop: 5,
+  },
+  priceDetailRowTotal: {
+    borderTopWidth: 2,
+    paddingTop: 10,
+    marginTop: 5,
+  },
+  priceDetailLabel: {
+    fontSize: 14,
+    flex: 1,
+  },
+  priceDetailLabelTotal: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  priceDetailValue: {
+    fontSize: 14,
+    fontWeight: "500",
+    textAlign: "right",
+    flex: 1,
+  },
+  priceDetailValueTotal: {
+    fontSize: 18,
     fontWeight: "bold",
   },
   // Стили для элементов выбора профиля и фурнитуры
@@ -1171,6 +1680,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     fontWeight: "500",
+  },
+  selectorSubtext: {
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 2,
   },
   loadingText: {
     fontSize: 14,
@@ -1212,6 +1726,16 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     justifyContent: "center",
     alignItems: "center",
+  },
+  expandButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  expandButtonText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 

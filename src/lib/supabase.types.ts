@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -20,18 +20,344 @@ export type Database = {
           id: number;
           name: string | null;
           price: number;
+          code: string | null;
+          system_code: string | null;
         };
         Insert: {
           created_at?: string;
           id?: number;
           name?: string | null;
           price?: number;
+          code?: string | null;
+          system_code?: string | null;
         };
         Update: {
           created_at?: string;
           id?: number;
           name?: string | null;
           price?: number;
+          code?: string | null;
+          system_code?: string | null;
+        };
+        Relationships: [];
+      };
+      furniture_systems: {
+        Row: {
+          id: number;
+          created_at: string;
+          code: string;
+          name: string;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          code: string;
+          name: string;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          code?: string;
+          name?: string;
+        };
+        Relationships: [];
+      };
+      furniture_items: {
+        Row: {
+          id: number;
+          created_at: string;
+          system_id: number | null;
+          code: string;
+          name: string;
+          price: number;
+          price_alt: number | null;
+          min_size: number | null;
+          max_size: number | null;
+          category: string | null;
+          description: string | null;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          system_id?: number | null;
+          code: string;
+          name: string;
+          price?: number;
+          price_alt?: number | null;
+          min_size?: number | null;
+          max_size?: number | null;
+          category?: string | null;
+          description?: string | null;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          system_id?: number | null;
+          code?: string;
+          name?: string;
+          price?: number;
+          price_alt?: number | null;
+          min_size?: number | null;
+          max_size?: number | null;
+          category?: string | null;
+          description?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "furniture_items_system_fkey";
+            columns: ["system_id"];
+            isOneToOne: false;
+            referencedRelation: "furniture_systems";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      glass_packages: {
+        Row: {
+          id: number;
+          created_at: string;
+          code: string;
+          name: string;
+          thickness: number;
+          price: number;
+          description: string | null;
+          is_energy_saving: boolean;
+          has_argon: boolean;
+          chamber_type: string;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          code: string;
+          name: string;
+          thickness: number;
+          price?: number;
+          description?: string | null;
+          is_energy_saving?: boolean;
+          has_argon?: boolean;
+          chamber_type?: string;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          code?: string;
+          name?: string;
+          thickness?: number;
+          price?: number;
+          description?: string | null;
+          is_energy_saving?: boolean;
+          has_argon?: boolean;
+          chamber_type?: string;
+        };
+        Relationships: [];
+      };
+      glass_types: {
+        Row: {
+          id: number;
+          created_at: string;
+          code: string;
+          name: string;
+          price: number;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          code: string;
+          name: string;
+          price?: number;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          code?: string;
+          name?: string;
+          price?: number;
+        };
+        Relationships: [];
+      };
+      handles: {
+        Row: {
+          id: number;
+          created_at: string;
+          code: string;
+          name: string;
+          price: number;
+          price_alt: number | null;
+          description: string | null;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          code: string;
+          name: string;
+          price?: number;
+          price_alt?: number | null;
+          description?: string | null;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          code?: string;
+          name?: string;
+          price?: number;
+          price_alt?: number | null;
+          description?: string | null;
+        };
+        Relationships: [];
+      };
+      windowsills: {
+        Row: {
+          id: number;
+          created_at: string;
+          width: number;
+          price: number;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          width: number;
+          price?: number;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          width?: number;
+          price?: number;
+        };
+        Relationships: [];
+      };
+      windowsill_accessories: {
+        Row: {
+          id: number;
+          created_at: string;
+          code: string;
+          name: string;
+          price: number;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          code: string;
+          name: string;
+          price?: number;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          code?: string;
+          name?: string;
+          price?: number;
+        };
+        Relationships: [];
+      };
+      muntins: {
+        Row: {
+          id: number;
+          created_at: string;
+          width: number;
+          price_white: number;
+          price_gold: number;
+          price_brown: number;
+          price_colored: number;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          width: number;
+          price_white?: number;
+          price_gold?: number;
+          price_brown?: number;
+          price_colored?: number;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          width?: number;
+          price_white?: number;
+          price_gold?: number;
+          price_brown?: number;
+          price_colored?: number;
+        };
+        Relationships: [];
+      };
+      mosquito_net_prices: {
+        Row: {
+          id: number;
+          created_at: string;
+          component: string;
+          name: string;
+          price: number;
+          unit: string;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          component: string;
+          name: string;
+          price?: number;
+          unit?: string;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          component?: string;
+          name?: string;
+          price?: number;
+          unit?: string;
+        };
+        Relationships: [];
+      };
+      reinforcement_prices: {
+        Row: {
+          id: number;
+          created_at: string;
+          profile_type: string;
+          thickness: string;
+          price: number;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          profile_type: string;
+          thickness: string;
+          price?: number;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          profile_type?: string;
+          thickness?: string;
+          price?: number;
+        };
+        Relationships: [];
+      };
+      extras: {
+        Row: {
+          id: number;
+          created_at: string;
+          code: string;
+          name: string;
+          price: number;
+          category: string | null;
+          description: string | null;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          code: string;
+          name: string;
+          price?: number;
+          category?: string | null;
+          description?: string | null;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          code?: string;
+          name?: string;
+          price?: number;
+          category?: string | null;
+          description?: string | null;
         };
         Relationships: [];
       };
@@ -109,18 +435,48 @@ export type Database = {
           id: number;
           name: string | null;
           price: number;
+          depth: number | null;
+          code: string | null;
+          frame_price: number;
+          sash_price: number;
+          impost_price: number;
+          shtulp_price: number | null;
+          door_frame_price: number | null;
+          door_sash_price: number | null;
+          threshold_price: number | null;
+          system_name: string | null;
         };
         Insert: {
           created_at?: string;
           id?: number;
           name?: string | null;
           price?: number;
+          depth?: number | null;
+          code?: string | null;
+          frame_price?: number;
+          sash_price?: number;
+          impost_price?: number;
+          shtulp_price?: number | null;
+          door_frame_price?: number | null;
+          door_sash_price?: number | null;
+          threshold_price?: number | null;
+          system_name?: string | null;
         };
         Update: {
           created_at?: string;
           id?: number;
           name?: string | null;
           price?: number;
+          depth?: number | null;
+          code?: string | null;
+          frame_price?: number;
+          sash_price?: number;
+          impost_price?: number;
+          shtulp_price?: number | null;
+          door_frame_price?: number | null;
+          door_sash_price?: number | null;
+          threshold_price?: number | null;
+          system_name?: string | null;
         };
         Relationships: [];
       };
@@ -198,6 +554,50 @@ export type Database = {
             columns: ["profileSystem"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      wnd_sections: {
+        Row: {
+          id: number;
+          created_at: string;
+          wnd_construction_id: number;
+          section_id: string;
+          width_mm: number | null;
+          height_mm: number | null;
+          opening_side: string | null;
+          opening_type: string | null;
+          has_handle: boolean;
+        };
+        Insert: {
+          id?: number;
+          created_at?: string;
+          wnd_construction_id: number;
+          section_id: string;
+          width_mm?: number | null;
+          height_mm?: number | null;
+          opening_side?: string | null;
+          opening_type?: string | null;
+          has_handle?: boolean;
+        };
+        Update: {
+          id?: number;
+          created_at?: string;
+          wnd_construction_id?: number;
+          section_id?: string;
+          width_mm?: number | null;
+          height_mm?: number | null;
+          opening_side?: string | null;
+          opening_type?: string | null;
+          has_handle?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wnd_sections_wnd_construction_fkey";
+            columns: ["wnd_construction_id"];
+            isOneToOne: false;
+            referencedRelation: "wnd_constructions";
             referencedColumns: ["id"];
           }
         ];

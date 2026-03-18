@@ -2,6 +2,16 @@ import React from "react";
 import { View, StyleSheet } from "react-native";
 import Svg, { Rect, Line, G, Defs, Pattern } from "react-native-svg";
 
+// Интерфейс секции окна (для редактирования отдельных частей)
+export interface WindowSection {
+  id: string;
+  widthMM?: number; // Ширина секции в мм (реальный размер)
+  heightMM?: number; // Высота секции в мм (реальный размер)
+  openingSide?: "left" | "right" | "top" | "bottom" | "fixed" | "single";
+  openingType?: "tilt_turn" | "turn" | "tilt" | "fixed" | "window" | "window_with_handle" | "balcony_door";
+  hasHandle?: boolean;
+}
+
 export interface WindowConfig {
   width: number;
   height: number;
@@ -13,6 +23,8 @@ export interface WindowConfig {
   price: number;
   config?: number;
   color?: string;
+  // Данные секций для детального редактирования
+  sections?: WindowSection[];
 }
 
 interface WindowVisualizerProps {
@@ -485,9 +497,43 @@ const WindowVisualizer: React.FC<WindowVisualizerProps> = ({
 
   // Функция для определения типа створки для конкретной позиции
   const getSashTypeForPosition = (
-    position: "left" | "center" | "right" | "single"
+    position: "left" | "center" | "right" | "single",
+    sectionIndex?: number
   ) => {
-    const sashType = Number(config.openingSashType) || 1; // По умолчанию "Обе створки поворотные"
+    // Если есть данные секций из редактора, используем их
+    if (config.sections && config.sections.length > 0) {
+      // Определяем индекс секции по позиции
+      let index = sectionIndex;
+      if (index === undefined) {
+        if (position === "single" || position === "left") index = 0;
+        else if (position === "center") index = 1;
+        else if (position === "right") index = config.sections.length - 1;
+      }
+      
+      const section = config.sections[index || 0];
+      if (section) {
+        // Конвертируем тип из секции в тип для ручки
+        switch (section.openingType) {
+          case "tilt_turn":
+            return "tilt-turn";
+          case "turn":
+            return "swing";
+          case "tilt":
+            return "tilt";
+          case "fixed":
+            return "fixed";
+          case "balcony_door":
+            return "swing";
+          default:
+            // Также проверяем openingSide
+            if (section.openingSide === "fixed") return "fixed";
+            if (section.openingSide === "left" || section.openingSide === "right") return "tilt-turn";
+        }
+      }
+    }
+
+    // Fallback к старой логике через openingSashType
+    const sashType = Number(config.openingSashType) || 1;
 
     // Для одиночных створок
     if (position === "single") {
@@ -501,7 +547,7 @@ const WindowVisualizer: React.FC<WindowVisualizerProps> = ({
         case 10:
           return "fixed";
         default:
-          return "fixed";
+          return "tilt-turn";
       }
     }
 
@@ -1641,6 +1687,1955 @@ const WindowVisualizer: React.FC<WindowVisualizerProps> = ({
             {renderHandle(
               offsetX + frameWidth / 2 + (3 * (scaledWidth - frameWidth)) / 4,
               offsetY + frameWidth / 2 + (scaledWidth - frameWidth) / 4,
+              getSashTypeForPosition("right")
+            )}
+          </>
+        );
+
+      case 13: // L-образное окно с двумя горизонтальными секциями слева и одной вертикальной справа
+        return (
+          <>
+            <Rect
+              x={offsetX}
+              y={offsetY}
+              width={scaledWidth}
+              height={scaledHeight}
+              fill={templateConfig.frameColor}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveFrameStroke}
+            />
+            {/* Левая верхняя часть - узкая горизонтальная секция (примерно в два раза меньше нижней) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 2 - adaptiveStrokeWidth / 2}
+              height={
+                (scaledHeight - frameWidth) * 0.25 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Левая нижняя часть - более широкая горизонтальная секция (примерно в два раза больше верхней) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 2 - adaptiveStrokeWidth / 2}
+              height={
+                (scaledHeight - frameWidth) * 0.5 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая часть - вертикальная секция на всю высоту */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 2 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 2 - adaptiveStrokeWidth / 2}
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Стекло левой верхней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 2 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) * 0.25 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло левой нижней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 2 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) * 0.5 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 2 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 2 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Вертикальная перекладина между левой и правой частями */}
+            <Line
+              x1={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 2}
+              y1={offsetY + frameWidth / 2}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 2}
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Горизонтальная перекладина между верхней и нижней левыми частями */}
+            <Line
+              x1={offsetX + frameWidth / 2}
+              y1={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.25}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 2}
+              y2={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.25}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Ручки */}
+            {renderHandle(
+              offsetX + (scaledWidth - frameWidth) / 4,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.125,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + (scaledWidth - frameWidth) / 4,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                (scaledHeight - frameWidth) * 0.25,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (3 * (scaledWidth - frameWidth)) / 4,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("right")
+            )}
+          </>
+        );
+
+      case 14: // Конфигурация 13 + отзеркаленные правые секции (левая сторона + центральная вертикальная + правая сторона с отзеркаленными секциями)
+        return (
+          <>
+            <Rect
+              x={offsetX}
+              y={offsetY}
+              width={scaledWidth}
+              height={scaledHeight}
+              fill={templateConfig.frameColor}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveFrameStroke}
+            />
+            {/* Левая верхняя часть - узкая горизонтальная секция (25% общей высоты) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={
+                (scaledHeight - frameWidth) * 0.25 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Левая нижняя часть - более широкая горизонтальная секция (50% общей высоты) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={
+                (scaledHeight - frameWidth) * 0.5 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Центральная часть - вертикальная секция на всю высоту */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth}
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая верхняя часть - отзеркаленная левая верхняя (25% общей высоты) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={
+                (scaledHeight - frameWidth) * 0.25 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая нижняя часть - отзеркаленная левая нижняя (50% общей высоты) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={
+                (scaledHeight - frameWidth) * 0.5 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Стекло левой верхней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) * 0.25 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло левой нижней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) * 0.5 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло центральной части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth - sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой верхней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) * 0.25 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой нижней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) * 0.5 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Вертикальные перекладины */}
+            <Line
+              x1={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y1={offsetY + frameWidth / 2}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y1={offsetY + frameWidth / 2}
+              x2={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Горизонтальные перекладины */}
+            <Line
+              x1={offsetX + frameWidth / 2}
+              y1={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.25}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y2={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.25}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y1={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.25}
+              x2={offsetX + scaledWidth - frameWidth / 2}
+              y2={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.25}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Ручки */}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.125,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 6,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                (scaledHeight - frameWidth) * 0.25,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + scaledWidth / 2,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("single")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (5 * (scaledWidth - frameWidth)) / 6,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.125,
+              getSashTypeForPosition("right")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (5 * (scaledWidth - frameWidth)) / 6,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                (scaledHeight - frameWidth) * 0.25,
+              getSashTypeForPosition("right")
+            )}
+          </>
+        );
+
+      case 15: // Полностью зеркальная версия конфигурации 13 (правая сторона с двумя горизонтальными секциями + левая вертикальная)
+        return (
+          <>
+            <Rect
+              x={offsetX}
+              y={offsetY}
+              width={scaledWidth}
+              height={scaledHeight}
+              fill={templateConfig.frameColor}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveFrameStroke}
+            />
+            {/* Левая часть - вертикальная секция на всю высоту */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 2 - adaptiveStrokeWidth / 2}
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая верхняя часть - узкая горизонтальная секция (примерно в два раза меньше нижней) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 2 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 2 - adaptiveStrokeWidth / 2}
+              height={
+                (scaledHeight - frameWidth) * 0.25 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая нижняя часть - более широкая горизонтальная секция (примерно в два раза больше верхней) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 2 +
+                adaptiveStrokeWidth / 2
+              }
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 2 - adaptiveStrokeWidth / 2}
+              height={
+                (scaledHeight - frameWidth) * 0.5 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Стекло левой части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 2 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой верхней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 2 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 2 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) * 0.25 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой нижней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 2 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 2 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) * 0.5 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Вертикальная перекладина между левой и правой частями */}
+            <Line
+              x1={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 2}
+              y1={offsetY + frameWidth / 2}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 2}
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Горизонтальная перекладина между верхней и нижней правыми частями */}
+            <Line
+              x1={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 2}
+              y1={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.25}
+              x2={offsetX + scaledWidth - frameWidth / 2}
+              y2={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.25}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Ручки */}
+            {renderHandle(
+              offsetX + (scaledWidth - frameWidth) / 4,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (3 * (scaledWidth - frameWidth)) / 4,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) * 0.125,
+              getSashTypeForPosition("right")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (3 * (scaledWidth - frameWidth)) / 4,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) * 0.25 +
+                (scaledHeight - frameWidth) * 0.25,
+              getSashTypeForPosition("right")
+            )}
+          </>
+        );
+
+      case 16: // Вертикально зеркальная версия конфигурации 14 (верхние части 2/3 высоты, нижние 1/3 высоты)
+        return (
+          <>
+            <Rect
+              x={offsetX}
+              y={offsetY}
+              width={scaledWidth}
+              height={scaledHeight}
+              fill={templateConfig.frameColor}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveFrameStroke}
+            />
+            {/* Левая верхняя часть - более широкая горизонтальная секция (2/3 высоты) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={
+                (2 * (scaledHeight - frameWidth)) / 3 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Левая нижняя часть - узкая горизонтальная секция (1/3 высоты) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (2 * (scaledHeight - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={(scaledHeight - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Центральная часть - вертикальная секция на всю высоту */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth}
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая верхняя часть - более широкая горизонтальная секция (2/3 высоты) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={
+                (2 * (scaledHeight - frameWidth)) / 3 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая нижняя часть - узкая горизонтальная секция (1/3 высоты) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (2 * (scaledHeight - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={(scaledHeight - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Стекло левой верхней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (2 * (scaledHeight - frameWidth)) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло левой нижней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (2 * (scaledHeight - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло центральной части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth - sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой верхней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (2 * (scaledHeight - frameWidth)) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой нижней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (2 * (scaledHeight - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Вертикальные перекладины */}
+            <Line
+              x1={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y1={offsetY + frameWidth / 2}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y1={offsetY + frameWidth / 2}
+              x2={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Горизонтальные перекладины */}
+            <Line
+              x1={offsetX + frameWidth / 2}
+              y1={
+                offsetY + frameWidth / 2 + (2 * (scaledHeight - frameWidth)) / 3
+              }
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y2={
+                offsetY + frameWidth / 2 + (2 * (scaledHeight - frameWidth)) / 3
+              }
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y1={
+                offsetY + frameWidth / 2 + (2 * (scaledHeight - frameWidth)) / 3
+              }
+              x2={offsetX + scaledWidth - frameWidth / 2}
+              y2={
+                offsetY + frameWidth / 2 + (2 * (scaledHeight - frameWidth)) / 3
+              }
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Ручки */}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 3,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 6,
+              offsetY +
+                frameWidth / 2 +
+                (2 * (scaledHeight - frameWidth)) / 3 +
+                (scaledHeight - frameWidth) / 6,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + scaledWidth / 2,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("single")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (5 * (scaledWidth - frameWidth)) / 6,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 3,
+              getSashTypeForPosition("right")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (5 * (scaledWidth - frameWidth)) / 6,
+              offsetY +
+                frameWidth / 2 +
+                (2 * (scaledHeight - frameWidth)) / 3 +
+                (scaledHeight - frameWidth) / 6,
+              getSashTypeForPosition("right")
+            )}
+          </>
+        );
+
+      case 17: // Левая часть с двумя горизонтальными секциями + средняя и правая вертикальные на всю высоту
+        return (
+          <>
+            <Rect
+              x={offsetX}
+              y={offsetY}
+              width={scaledWidth}
+              height={scaledHeight}
+              fill={templateConfig.frameColor}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveFrameStroke}
+            />
+            {/* Левая верхняя часть - узкая горизонтальная секция (1/3 высоты) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={(scaledHeight - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Левая нижняя часть - более широкая горизонтальная секция (2/3 высоты) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={
+                (2 * (scaledHeight - frameWidth)) / 3 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Средняя часть - вертикальная секция на всю высоту (равная по ширине) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth}
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая часть - вертикальная секция на всю высоту (равная по ширине) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Стекло левой верхней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло левой нижней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (2 * (scaledHeight - frameWidth)) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло средней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth - sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Вертикальные перекладины */}
+            <Line
+              x1={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y1={offsetY + frameWidth / 2}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y1={offsetY + frameWidth / 2}
+              x2={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Горизонтальная перекладина между верхней и нижней левыми частями */}
+            <Line
+              x1={offsetX + frameWidth / 2}
+              y1={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 3}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y2={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 3}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Ручки */}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 6,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 6,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 3 +
+                (scaledHeight - frameWidth) / 3,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + scaledWidth / 2,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("single")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (5 * (scaledWidth - frameWidth)) / 6,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("right")
+            )}
+          </>
+        );
+
+      case 18: // Зеркальная версия конфигурации 17 (правая часть с двумя горизонтальными секциями + левая и средняя вертикальные на всю высоту)
+        return (
+          <>
+            <Rect
+              x={offsetX}
+              y={offsetY}
+              width={scaledWidth}
+              height={scaledHeight}
+              fill={templateConfig.frameColor}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveFrameStroke}
+            />
+            {/* Левая часть - вертикальная секция на всю высоту (равная по ширине) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Средняя часть - вертикальная секция на всю высоту (равная по ширине) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth}
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая верхняя часть - узкая горизонтальная секция (1/3 высоты) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={(scaledHeight - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая нижняя часть - более широкая горизонтальная секция (2/3 высоты) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={
+                (2 * (scaledHeight - frameWidth)) / 3 - adaptiveStrokeWidth / 2
+              }
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Стекло левой части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло средней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth - sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой верхней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой нижней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (2 * (scaledHeight - frameWidth)) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Вертикальные перекладины */}
+            <Line
+              x1={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y1={offsetY + frameWidth / 2}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y1={offsetY + frameWidth / 2}
+              x2={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Горизонтальная перекладина между верхней и нижней правыми частями */}
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y1={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 3}
+              x2={offsetX + scaledWidth - frameWidth / 2}
+              y2={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 3}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Ручки */}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + scaledWidth / 2,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("single")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (5 * (scaledWidth - frameWidth)) / 6,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 6,
+              getSashTypeForPosition("right")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (5 * (scaledWidth - frameWidth)) / 6,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 3 +
+                (scaledHeight - frameWidth) / 3,
+              getSashTypeForPosition("right")
+            )}
+          </>
+        );
+
+      case 19: // Левая колонка с тремя вертикальными секциями (верхняя, средняя, нижняя) + правая колонка (2/3 ширины) на всю высоту
+        return (
+          <>
+            <Rect
+              x={offsetX}
+              y={offsetY}
+              width={scaledWidth}
+              height={scaledHeight}
+              fill={templateConfig.frameColor}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveFrameStroke}
+            />
+            {/* Левая верхняя часть - горизонтальная секция (1/4 высоты) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={(scaledHeight - frameWidth) / 4 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Левая средняя часть - квадратоподобная секция (1/2 высоты) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 4 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={(scaledHeight - frameWidth) / 2 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Левая нижняя часть - горизонтальная секция (1/4 высоты) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (3 * (scaledHeight - frameWidth)) / 4 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={(scaledHeight - frameWidth) / 4 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая часть - вертикальная секция на всю высоту (2/3 ширины) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={
+                (2 * (scaledWidth - frameWidth)) / 3 - adaptiveStrokeWidth / 2
+              }
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Стекло левой верхней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 4 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло левой средней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 4 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 2 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло левой нижней части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (3 * (scaledHeight - frameWidth)) / 4 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 4 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (2 * (scaledWidth - frameWidth)) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Вертикальная перекладина между левой и правой частями */}
+            <Line
+              x1={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y1={offsetY + frameWidth / 2}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Горизонтальные перекладины в левой части */}
+            <Line
+              x1={offsetX + frameWidth / 2}
+              y1={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 4}
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y2={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 4}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={offsetX + frameWidth / 2}
+              y1={
+                offsetY + frameWidth / 2 + (3 * (scaledHeight - frameWidth)) / 4
+              }
+              x2={offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 3}
+              y2={
+                offsetY + frameWidth / 2 + (3 * (scaledHeight - frameWidth)) / 4
+              }
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Ручки */}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 8,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 2,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + (7 * (scaledHeight - frameWidth)) / 8,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 2 +
+                (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("right")
+            )}
+          </>
+        );
+
+      case 20: // Центральная вертикальная секция на всю высоту + три вертикальные секции слева и три справа
+        return (
+          <>
+            <Rect
+              x={offsetX}
+              y={offsetY}
+              width={scaledWidth}
+              height={scaledHeight}
+              fill={templateConfig.frameColor}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveFrameStroke}
+            />
+            {/* Левая верхняя секция */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={offsetY + frameWidth / 2}
+              width={
+                (7 * (scaledWidth - frameWidth)) / 20 - adaptiveStrokeWidth / 2
+              }
+              height={(scaledHeight - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Левая средняя секция */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              width={
+                (7 * (scaledWidth - frameWidth)) / 20 - adaptiveStrokeWidth / 2
+              }
+              height={(scaledHeight - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Левая нижняя секция */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (2 * (scaledHeight - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              width={
+                (7 * (scaledWidth - frameWidth)) / 20 - adaptiveStrokeWidth / 2
+              }
+              height={(scaledHeight - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Центральная вертикальная секция на всю высоту */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={
+                (3 * (scaledWidth - frameWidth)) / 10 - adaptiveStrokeWidth
+              }
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая верхняя секция */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={
+                (7 * (scaledWidth - frameWidth)) / 20 - adaptiveStrokeWidth / 2
+              }
+              height={(scaledHeight - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая средняя секция */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10 +
+                adaptiveStrokeWidth / 2
+              }
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              width={
+                (7 * (scaledWidth - frameWidth)) / 20 - adaptiveStrokeWidth / 2
+              }
+              height={(scaledHeight - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая нижняя секция */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10 +
+                adaptiveStrokeWidth / 2
+              }
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (2 * (scaledHeight - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              width={
+                (7 * (scaledWidth - frameWidth)) / 20 - adaptiveStrokeWidth / 2
+              }
+              height={(scaledHeight - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Стекло левой верхней секции */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (7 * (scaledWidth - frameWidth)) / 20 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло левой средней секции */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (7 * (scaledWidth - frameWidth)) / 20 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло левой нижней секции */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (2 * (scaledHeight - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (7 * (scaledWidth - frameWidth)) / 20 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло центральной секции */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (3 * (scaledWidth - frameWidth)) / 10 -
+                adaptiveStrokeWidth -
+                sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой верхней секции */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (7 * (scaledWidth - frameWidth)) / 20 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой средней секции */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (7 * (scaledWidth - frameWidth)) / 20 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой нижней секции */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (2 * (scaledHeight - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (7 * (scaledWidth - frameWidth)) / 20 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Вертикальные перекладины */}
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (7 * (scaledWidth - frameWidth)) / 20
+              }
+              y1={offsetY + frameWidth / 2}
+              x2={
+                offsetX + frameWidth / 2 + (7 * (scaledWidth - frameWidth)) / 20
+              }
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={
+                offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10
+              }
+              y1={offsetY + frameWidth / 2}
+              x2={
+                offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10
+              }
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Горизонтальные перекладины в левой части */}
+            <Line
+              x1={offsetX + frameWidth / 2}
+              y1={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 3}
+              x2={
+                offsetX + frameWidth / 2 + (7 * (scaledWidth - frameWidth)) / 20
+              }
+              y2={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 3}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={offsetX + frameWidth / 2}
+              y1={
+                offsetY + frameWidth / 2 + (2 * (scaledHeight - frameWidth)) / 3
+              }
+              x2={
+                offsetX + frameWidth / 2 + (7 * (scaledWidth - frameWidth)) / 20
+              }
+              y2={
+                offsetY + frameWidth / 2 + (2 * (scaledHeight - frameWidth)) / 3
+              }
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Горизонтальные перекладины в правой части */}
+            <Line
+              x1={
+                offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10
+              }
+              y1={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 3}
+              x2={offsetX + scaledWidth - frameWidth / 2}
+              y2={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 3}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={
+                offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10
+              }
+              y1={
+                offsetY + frameWidth / 2 + (2 * (scaledHeight - frameWidth)) / 3
+              }
+              x2={offsetX + scaledWidth - frameWidth / 2}
+              y2={
+                offsetY + frameWidth / 2 + (2 * (scaledHeight - frameWidth)) / 3
+              }
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Ручки */}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (7 * (scaledWidth - frameWidth)) / 40,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 6,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (7 * (scaledWidth - frameWidth)) / 40,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 2,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + (7 * (scaledWidth - frameWidth)) / 40,
+              offsetY + frameWidth / 2 + (5 * (scaledHeight - frameWidth)) / 6,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX + frameWidth / 2 + scaledWidth / 2,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("single")
+            )}
+            {renderHandle(
+              offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10 +
+                (7 * (scaledWidth - frameWidth)) / 40,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 6,
+              getSashTypeForPosition("right")
+            )}
+            {renderHandle(
+              offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10 +
+                (7 * (scaledWidth - frameWidth)) / 40,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 2,
+              getSashTypeForPosition("right")
+            )}
+            {renderHandle(
+              offsetX +
+                frameWidth / 2 +
+                (7 * (scaledWidth - frameWidth)) / 20 +
+                (3 * (scaledWidth - frameWidth)) / 10 +
+                (7 * (scaledWidth - frameWidth)) / 40,
+              offsetY + frameWidth / 2 + (5 * (scaledHeight - frameWidth)) / 6,
+              getSashTypeForPosition("right")
+            )}
+          </>
+        );
+
+      case 21: // Зеркальная версия конфигурации 19 (правая колонка с тремя вертикальными секциями + левая колонка на всю высоту)
+        return (
+          <>
+            <Rect
+              x={offsetX}
+              y={offsetY}
+              width={scaledWidth}
+              height={scaledHeight}
+              fill={templateConfig.frameColor}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveFrameStroke}
+            />
+            {/* Левая часть - вертикальная секция на всю высоту (2/3 ширины) */}
+            <Rect
+              x={offsetX + frameWidth / 2}
+              y={offsetY + frameWidth / 2}
+              width={
+                (2 * (scaledWidth - frameWidth)) / 3 - adaptiveStrokeWidth / 2
+              }
+              height={scaledHeight - frameWidth}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая верхняя часть - горизонтальная секция (1/4 высоты) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={offsetY + frameWidth / 2}
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={(scaledHeight - frameWidth) / 4 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая средняя часть - квадратоподобная секция (1/2 высоты) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 4 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={(scaledHeight - frameWidth) / 2 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Правая нижняя часть - горизонтальная секция (1/4 высоты) */}
+            <Rect
+              x={
+                offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2
+              }
+              y={
+                offsetY +
+                frameWidth / 2 +
+                (3 * (scaledHeight - frameWidth)) / 4 +
+                adaptiveStrokeWidth / 2
+              }
+              width={(scaledWidth - frameWidth) / 3 - adaptiveStrokeWidth / 2}
+              height={(scaledHeight - frameWidth) / 4 - adaptiveStrokeWidth / 2}
+              fill="none"
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveSashStroke}
+            />
+            {/* Стекло левой части */}
+            {renderGlass(
+              offsetX + frameWidth / 2 + sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (2 * (scaledWidth - frameWidth)) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              scaledHeight - frameWidth - sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой верхней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY + frameWidth / 2 + sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 4 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой средней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (scaledHeight - frameWidth) / 4 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 2 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Стекло правой нижней части */}
+            {renderGlass(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              offsetY +
+                frameWidth / 2 +
+                (3 * (scaledHeight - frameWidth)) / 4 +
+                adaptiveStrokeWidth / 2 +
+                sashWidth / 2,
+              (scaledWidth - frameWidth) / 3 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              (scaledHeight - frameWidth) / 4 -
+                adaptiveStrokeWidth / 2 -
+                sashWidth,
+              config.glassThickness
+            )}
+            {/* Вертикальная перекладина между левой и правой частями */}
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y1={offsetY + frameWidth / 2}
+              x2={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y2={offsetY + scaledHeight - frameWidth / 2}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Горизонтальные перекладины в правой части */}
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y1={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 4}
+              x2={offsetX + scaledWidth - frameWidth / 2}
+              y2={offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 4}
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            <Line
+              x1={
+                offsetX + frameWidth / 2 + (2 * (scaledWidth - frameWidth)) / 3
+              }
+              y1={
+                offsetY + frameWidth / 2 + (3 * (scaledHeight - frameWidth)) / 4
+              }
+              x2={offsetX + scaledWidth - frameWidth / 2}
+              y2={
+                offsetY + frameWidth / 2 + (3 * (scaledHeight - frameWidth)) / 4
+              }
+              stroke={templateConfig.sashColor}
+              strokeWidth={adaptiveStrokeWidth}
+            />
+            {/* Ручки */}
+            {renderHandle(
+              offsetX +
+                frameWidth / 2 +
+                (scaledWidth - frameWidth) / 2 +
+                (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + scaledHeight / 2,
+              getSashTypeForPosition("left")
+            )}
+            {renderHandle(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 8,
+              getSashTypeForPosition("right")
+            )}
+            {renderHandle(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + (scaledHeight - frameWidth) / 2,
+              getSashTypeForPosition("right")
+            )}
+            {renderHandle(
+              offsetX +
+                frameWidth / 2 +
+                (2 * (scaledWidth - frameWidth)) / 3 +
+                (scaledWidth - frameWidth) / 6,
+              offsetY + frameWidth / 2 + (7 * (scaledHeight - frameWidth)) / 8,
               getSashTypeForPosition("right")
             )}
           </>

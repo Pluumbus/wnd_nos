@@ -37,6 +37,21 @@ const windowConfigurations = [
   { id: 10, name: "L с разделением" },
   { id: 11, name: "T с разделением" },
   { id: 12, name: "Обратное L с разделением" },
+  
+  // Row 5
+  { id: 13, name: "L с тремя секциями" },
+  { id: 14, name: "L с центральной секцией" },
+  { id: 15, name: "Обратное L с тремя секциями" },
+  
+  // Row 6
+  { id: 16, name: "Зеркальное L с центральной" },
+  { id: 17, name: "С двумя вертикальными" },
+  { id: 18, name: "Зеркальное с двумя вертикальными" },
+  
+  // Row 7
+  { id: 19, name: "Три секции слева" },
+  { id: 20, name: "Центральная с боковыми" },
+  { id: 21, name: "Зеркальные три секции" },
 ];
 
 const WindowConfigSelector: React.FC<WindowConfigSelectorProps> = ({
@@ -426,6 +441,354 @@ const WindowConfigSelector: React.FC<WindowConfigSelectorProps> = ({
           </View>
         );
 
+      case 13: // L-образное окно с двумя горизонтальными секциями слева и одной вертикальной справа
+        return (
+          <View
+            style={[styles.previewContainer, { width: size, height: size }]}
+          >
+            {createRect(3, 3, size - 6, size - 6, true)}
+            {/* Левая верхняя часть - узкая горизонтальная секция (25% высоты, примерно в два раза меньше нижней) */}
+            {createRect(6, 6, (size - 12) / 2 - 1, Math.round((size - 12) * 0.25) - 1)}
+            {/* Левая нижняя часть - более широкая горизонтальная секция (50% высоты, примерно в два раза больше верхней) */}
+            {createRect(
+              6,
+              6 + Math.round((size - 12) * 0.25) + 1,
+              (size - 12) / 2 - 1,
+              Math.round((size - 12) * 0.5) - 1
+            )}
+            {/* Правая часть - вертикальная секция на всю высоту */}
+            {createRect(size / 2 + 1, 6, (size - 12) / 2 - 1, size - 12)}
+            {/* Вертикальная перекладина между левой и правой частями */}
+            {createLine(size / 2, 6, size / 2, size - 6)}
+            {/* Горизонтальная перекладина между верхней и нижней левыми частями */}
+            {createLine(6, 6 + Math.round((size - 12) * 0.25), size / 2, 6 + Math.round((size - 12) * 0.25))}
+          </View>
+        );
+
+      case 14: // Конфигурация 13 + отзеркаленные правые секции
+        return (
+          <View
+            style={[styles.previewContainer, { width: size, height: size }]}
+          >
+            {createRect(3, 3, size - 6, size - 6, true)}
+            {/* Левая верхняя часть (25% высоты, меньше) */}
+            {createRect(6, 6, (size - 12) / 3 - 1, Math.round((size - 12) * 0.25) - 1)}
+            {/* Левая нижняя часть (50% высоты, больше) */}
+            {createRect(
+              6,
+              6 + Math.round((size - 12) * 0.25) + 1,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) * 0.5) - 1
+            )}
+            {/* Центральная часть - вертикальная секция на всю высоту */}
+            {createRect(
+              6 + (size - 12) / 3 + 1,
+              6,
+              (size - 12) / 3 - 2,
+              size - 12
+            )}
+            {/* Правая верхняя часть - отзеркаленная левая верхняя (25% высоты) */}
+            {createRect(
+              6 + (2 * (size - 12)) / 3 + 2,
+              6,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) * 0.25) - 1
+            )}
+            {/* Правая нижняя часть - отзеркаленная левая нижняя (50% высоты) */}
+            {createRect(
+              6 + (2 * (size - 12)) / 3 + 2,
+              6 + Math.round((size - 12) * 0.25) + 1,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) * 0.5) - 1
+            )}
+            {/* Вертикальные перекладины */}
+            {createLine(6 + (size - 12) / 3, 6, 6 + (size - 12) / 3, size - 6)}
+            {createLine(6 + (2 * (size - 12)) / 3, 6, 6 + (2 * (size - 12)) / 3, size - 6)}
+            {/* Горизонтальные перекладины */}
+            {createLine(6, 6 + Math.round((size - 12) * 0.25), 6 + (size - 12) / 3, 6 + Math.round((size - 12) * 0.25))}
+            {createLine(6 + (2 * (size - 12)) / 3, 6 + Math.round((size - 12) * 0.25), size - 6, 6 + Math.round((size - 12) * 0.25))}
+          </View>
+        );
+
+      case 15: // Полностью зеркальная версия конфигурации 13
+        return (
+          <View
+            style={[styles.previewContainer, { width: size, height: size }]}
+          >
+            {createRect(3, 3, size - 6, size - 6, true)}
+            {/* Левая часть - вертикальная секция на всю высоту */}
+            {createRect(6, 6, (size - 12) / 2 - 1, size - 12)}
+            {/* Правая верхняя часть - узкая горизонтальная секция (25% высоты) */}
+            {createRect(size / 2 + 1, 6, (size - 12) / 2 - 1, Math.round((size - 12) * 0.25) - 1)}
+            {/* Правая нижняя часть - более широкая горизонтальная секция (50% высоты) */}
+            {createRect(
+              size / 2 + 1,
+              6 + Math.round((size - 12) * 0.25) + 1,
+              (size - 12) / 2 - 1,
+              Math.round((size - 12) * 0.5) - 1
+            )}
+            {/* Вертикальная перекладина между левой и правой частями */}
+            {createLine(size / 2, 6, size / 2, size - 6)}
+            {/* Горизонтальная перекладина между верхней и нижней правыми частями */}
+            {createLine(size / 2, 6 + Math.round((size - 12) * 0.25), size - 6, 6 + Math.round((size - 12) * 0.25))}
+          </View>
+        );
+
+      case 16: // Вертикально зеркальная версия конфигурации 14
+        return (
+          <View
+            style={[styles.previewContainer, { width: size, height: size }]}
+          >
+            {createRect(3, 3, size - 6, size - 6, true)}
+            {/* Левая верхняя часть - более широкая горизонтальная секция (2/3 высоты) */}
+            {createRect(6, 6, (size - 12) / 3 - 1, Math.round((2 * (size - 12)) / 3) - 1)}
+            {/* Левая нижняя часть - узкая горизонтальная секция (1/3 высоты) */}
+            {createRect(
+              6,
+              6 + Math.round((2 * (size - 12)) / 3) + 1,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) / 3) - 1
+            )}
+            {/* Центральная часть - вертикальная секция на всю высоту */}
+            {createRect(
+              6 + (size - 12) / 3 + 1,
+              6,
+              (size - 12) / 3 - 2,
+              size - 12
+            )}
+            {/* Правая верхняя часть - более широкая горизонтальная секция (2/3 высоты) */}
+            {createRect(
+              6 + (2 * (size - 12)) / 3 + 2,
+              6,
+              (size - 12) / 3 - 1,
+              Math.round((2 * (size - 12)) / 3) - 1
+            )}
+            {/* Правая нижняя часть - узкая горизонтальная секция (1/3 высоты) */}
+            {createRect(
+              6 + (2 * (size - 12)) / 3 + 2,
+              6 + Math.round((2 * (size - 12)) / 3) + 1,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) / 3) - 1
+            )}
+            {/* Вертикальные перекладины */}
+            {createLine(6 + (size - 12) / 3, 6, 6 + (size - 12) / 3, size - 6)}
+            {createLine(6 + (2 * (size - 12)) / 3, 6, 6 + (2 * (size - 12)) / 3, size - 6)}
+            {/* Горизонтальные перекладины */}
+            {createLine(6, 6 + Math.round((2 * (size - 12)) / 3), 6 + (size - 12) / 3, 6 + Math.round((2 * (size - 12)) / 3))}
+            {createLine(6 + (2 * (size - 12)) / 3, 6 + Math.round((2 * (size - 12)) / 3), size - 6, 6 + Math.round((2 * (size - 12)) / 3))}
+          </View>
+        );
+
+      case 17: // Левая часть с двумя горизонтальными секциями + средняя и правая вертикальные на всю высоту
+        return (
+          <View
+            style={[styles.previewContainer, { width: size, height: size }]}
+          >
+            {createRect(3, 3, size - 6, size - 6, true)}
+            {/* Левая верхняя часть (1/3 высоты) */}
+            {createRect(6, 6, (size - 12) / 3 - 1, Math.round((size - 12) / 3) - 1)}
+            {/* Левая нижняя часть (2/3 высоты) */}
+            {createRect(
+              6,
+              6 + Math.round((size - 12) / 3) + 1,
+              (size - 12) / 3 - 1,
+              Math.round((2 * (size - 12)) / 3) - 1
+            )}
+            {/* Средняя часть - вертикальная секция на всю высоту (равная по ширине) */}
+            {createRect(
+              6 + (size - 12) / 3 + 1,
+              6,
+              (size - 12) / 3 - 2,
+              size - 12
+            )}
+            {/* Правая часть - вертикальная секция на всю высоту (равная по ширине) */}
+            {createRect(
+              6 + (2 * (size - 12)) / 3 + 2,
+              6,
+              (size - 12) / 3 - 1,
+              size - 12
+            )}
+            {/* Вертикальные перекладины */}
+            {createLine(6 + (size - 12) / 3, 6, 6 + (size - 12) / 3, size - 6)}
+            {createLine(6 + (2 * (size - 12)) / 3, 6, 6 + (2 * (size - 12)) / 3, size - 6)}
+            {/* Горизонтальная перекладина между верхней и нижней левыми частями */}
+            {createLine(6, 6 + Math.round((size - 12) / 3), 6 + (size - 12) / 3, 6 + Math.round((size - 12) / 3))}
+          </View>
+        );
+
+      case 18: // Зеркальная версия конфигурации 17
+        return (
+          <View
+            style={[styles.previewContainer, { width: size, height: size }]}
+          >
+            {createRect(3, 3, size - 6, size - 6, true)}
+            {/* Левая часть - вертикальная секция на всю высоту (равная по ширине) */}
+            {createRect(6, 6, (size - 12) / 3 - 1, size - 12)}
+            {/* Средняя часть - вертикальная секция на всю высоту (равная по ширине) */}
+            {createRect(
+              6 + (size - 12) / 3 + 1,
+              6,
+              (size - 12) / 3 - 2,
+              size - 12
+            )}
+            {/* Правая верхняя часть (1/3 высоты) */}
+            {createRect(
+              6 + (2 * (size - 12)) / 3 + 2,
+              6,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) / 3) - 1
+            )}
+            {/* Правая нижняя часть (2/3 высоты) */}
+            {createRect(
+              6 + (2 * (size - 12)) / 3 + 2,
+              6 + Math.round((size - 12) / 3) + 1,
+              (size - 12) / 3 - 1,
+              Math.round((2 * (size - 12)) / 3) - 1
+            )}
+            {/* Вертикальные перекладины */}
+            {createLine(6 + (size - 12) / 3, 6, 6 + (size - 12) / 3, size - 6)}
+            {createLine(6 + (2 * (size - 12)) / 3, 6, 6 + (2 * (size - 12)) / 3, size - 6)}
+            {/* Горизонтальная перекладина между верхней и нижней правыми частями */}
+            {createLine(6 + (2 * (size - 12)) / 3, 6 + Math.round((size - 12) / 3), size - 6, 6 + Math.round((size - 12) / 3))}
+          </View>
+        );
+
+      case 19: // Левая колонка с тремя вертикальными секциями + правая колонка (2/3 ширины) на всю высоту
+        return (
+          <View
+            style={[styles.previewContainer, { width: size, height: size }]}
+          >
+            {createRect(3, 3, size - 6, size - 6, true)}
+            {/* Левая верхняя часть (1/4 высоты) */}
+            {createRect(6, 6, (size - 12) / 3 - 1, Math.round((size - 12) / 4) - 1)}
+            {/* Левая средняя часть (1/2 высоты) */}
+            {createRect(
+              6,
+              6 + Math.round((size - 12) / 4) + 1,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) / 2) - 1
+            )}
+            {/* Левая нижняя часть (1/4 высоты) */}
+            {createRect(
+              6,
+              6 + Math.round((3 * (size - 12)) / 4) + 2,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) / 4) - 1
+            )}
+            {/* Правая часть - вертикальная секция на всю высоту (2/3 ширины) */}
+            {createRect(
+              6 + (size - 12) / 3 + 1,
+              6,
+              (2 * (size - 12)) / 3 - 2,
+              size - 12
+            )}
+            {/* Вертикальная перекладина */}
+            {createLine(6 + (size - 12) / 3, 6, 6 + (size - 12) / 3, size - 6)}
+            {/* Горизонтальные перекладины в левой части */}
+            {createLine(6, 6 + Math.round((size - 12) / 4), 6 + (size - 12) / 3, 6 + Math.round((size - 12) / 4))}
+            {createLine(6, 6 + Math.round((3 * (size - 12)) / 4), 6 + (size - 12) / 3, 6 + Math.round((3 * (size - 12)) / 4))}
+          </View>
+        );
+
+      case 20: // Центральная вертикальная секция на всю высоту + три вертикальные секции слева и три справа
+        return (
+          <View
+            style={[styles.previewContainer, { width: size, height: size }]}
+          >
+            {createRect(3, 3, size - 6, size - 6, true)}
+            {/* Левая верхняя секция */}
+            {createRect(6, 6, (7 * (size - 12)) / 20 - 1, Math.round((size - 12) / 3) - 1)}
+            {/* Левая средняя секция */}
+            {createRect(
+              6,
+              6 + Math.round((size - 12) / 3) + 1,
+              (7 * (size - 12)) / 20 - 1,
+              Math.round((size - 12) / 3) - 1
+            )}
+            {/* Левая нижняя секция */}
+            {createRect(
+              6,
+              6 + Math.round((2 * (size - 12)) / 3) + 2,
+              (7 * (size - 12)) / 20 - 1,
+              Math.round((size - 12) / 3) - 1
+            )}
+            {/* Центральная вертикальная секция на всю высоту */}
+            {createRect(
+              6 + (7 * (size - 12)) / 20 + 1,
+              6,
+              (3 * (size - 12)) / 10 - 2,
+              size - 12
+            )}
+            {/* Правая верхняя секция */}
+            {createRect(
+              6 + (7 * (size - 12)) / 20 + (3 * (size - 12)) / 10 + 2,
+              6,
+              (7 * (size - 12)) / 20 - 1,
+              Math.round((size - 12) / 3) - 1
+            )}
+            {/* Правая средняя секция */}
+            {createRect(
+              6 + (7 * (size - 12)) / 20 + (3 * (size - 12)) / 10 + 2,
+              6 + Math.round((size - 12) / 3) + 1,
+              (7 * (size - 12)) / 20 - 1,
+              Math.round((size - 12) / 3) - 1
+            )}
+            {/* Правая нижняя секция */}
+            {createRect(
+              6 + (7 * (size - 12)) / 20 + (3 * (size - 12)) / 10 + 2,
+              6 + Math.round((2 * (size - 12)) / 3) + 2,
+              (7 * (size - 12)) / 20 - 1,
+              Math.round((size - 12) / 3) - 1
+            )}
+            {/* Вертикальные перекладины */}
+            {createLine(6 + (7 * (size - 12)) / 20, 6, 6 + (7 * (size - 12)) / 20, size - 6)}
+            {createLine(6 + (7 * (size - 12)) / 20 + (3 * (size - 12)) / 10, 6, 6 + (7 * (size - 12)) / 20 + (3 * (size - 12)) / 10, size - 6)}
+            {/* Горизонтальные перекладины в левой части */}
+            {createLine(6, 6 + Math.round((size - 12) / 3), 6 + (7 * (size - 12)) / 20, 6 + Math.round((size - 12) / 3))}
+            {createLine(6, 6 + Math.round((2 * (size - 12)) / 3), 6 + (7 * (size - 12)) / 20, 6 + Math.round((2 * (size - 12)) / 3))}
+            {/* Горизонтальные перекладины в правой части */}
+            {createLine(6 + (7 * (size - 12)) / 20 + (3 * (size - 12)) / 10, 6 + Math.round((size - 12) / 3), size - 6, 6 + Math.round((size - 12) / 3))}
+            {createLine(6 + (7 * (size - 12)) / 20 + (3 * (size - 12)) / 10, 6 + Math.round((2 * (size - 12)) / 3), size - 6, 6 + Math.round((2 * (size - 12)) / 3))}
+          </View>
+        );
+
+      case 21: // Зеркальная версия конфигурации 19
+        return (
+          <View
+            style={[styles.previewContainer, { width: size, height: size }]}
+          >
+            {createRect(3, 3, size - 6, size - 6, true)}
+            {/* Левая часть - вертикальная секция на всю высоту (2/3 ширины) */}
+            {createRect(6, 6, (2 * (size - 12)) / 3 - 1, size - 12)}
+            {/* Правая верхняя часть (1/4 высоты) */}
+            {createRect(
+              6 + (2 * (size - 12)) / 3 + 1,
+              6,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) / 4) - 1
+            )}
+            {/* Правая средняя часть (1/2 высоты) */}
+            {createRect(
+              6 + (2 * (size - 12)) / 3 + 1,
+              6 + Math.round((size - 12) / 4) + 1,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) / 2) - 1
+            )}
+            {/* Правая нижняя часть (1/4 высоты) */}
+            {createRect(
+              6 + (2 * (size - 12)) / 3 + 1,
+              6 + Math.round((3 * (size - 12)) / 4) + 2,
+              (size - 12) / 3 - 1,
+              Math.round((size - 12) / 4) - 1
+            )}
+            {/* Вертикальная перекладина */}
+            {createLine(6 + (2 * (size - 12)) / 3, 6, 6 + (2 * (size - 12)) / 3, size - 6)}
+            {/* Горизонтальные перекладины в правой части */}
+            {createLine(6 + (2 * (size - 12)) / 3, 6 + Math.round((size - 12) / 4), size - 6, 6 + Math.round((size - 12) / 4))}
+            {createLine(6 + (2 * (size - 12)) / 3, 6 + Math.round((3 * (size - 12)) / 4), size - 6, 6 + Math.round((3 * (size - 12)) / 4))}
+          </View>
+        );
+
       default:
         return (
           <View
@@ -449,6 +812,12 @@ const WindowConfigSelector: React.FC<WindowConfigSelectorProps> = ({
       windowConfigurations.filter((config) => [7, 8, 9].includes(config.id)),
       // Row 4: 3 элемента (10, 11, 12)
       windowConfigurations.filter((config) => [10, 11, 12].includes(config.id)),
+      // Row 5: 3 элемента (13, 14, 15)
+      windowConfigurations.filter((config) => [13, 14, 15].includes(config.id)),
+      // Row 6: 3 элемента (16, 17, 18)
+      windowConfigurations.filter((config) => [16, 17, 18].includes(config.id)),
+      // Row 7: 3 элемента (19, 20, 21)
+      windowConfigurations.filter((config) => [19, 20, 21].includes(config.id)),
     ];
 
     return (

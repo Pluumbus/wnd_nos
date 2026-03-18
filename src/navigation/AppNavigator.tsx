@@ -5,6 +5,8 @@ import HomeScreen from "../screens/HomeScreen";
 import OrdersScreen from "../screens/OrdersScreen";
 import NewOrderScreen from "../screens/NewOrderScreen";
 import WorkflowScreen from "../screens/WorkflowScreen";
+import PriceScreen from "../screens/PriceScreen";
+import SettingsScreen from "../screens/SettingsScreen";
 import { OrderWithJoins } from "../services/orderService";
 import { NotificationTestScreen } from "../screens/NotificationTestScreen";
 import { NavigationContainer } from "@react-navigation/native";
@@ -14,6 +16,8 @@ export type RootStackParamList = {
   Orders: undefined;
   NewOrder: undefined;
   NotificationTest: undefined;
+  Price: undefined;
+  Settings: undefined;
   Workflow: {
     orderData: OrderWithJoins;
     isNewOrder: boolean;
@@ -34,6 +38,8 @@ const AppNavigator: React.FC = () => {
         <Stack.Screen name="Orders" component={OrdersScreen} />
         <Stack.Screen name="NewOrder" component={NewOrderScreen} />
         <Stack.Screen name="Workflow" component={WorkflowScreen} />
+        <Stack.Screen name="Price" component={PriceScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen
           name="NotificationTest"
           component={NotificationTestScreen}

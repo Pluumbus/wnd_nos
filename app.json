@@ -4,16 +4,16 @@
     "slug": "wndnos",
     "version": "1.0.0",
     "orientation": "default",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/WindowLogo_512x512.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/WindowLogo_512x512.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "notification": {
-      "icon": "./assets/icon.png",
+      "icon": "./assets/WindowLogo_512x512.png",
       "color": "#ffffff",
       "iosDisplayInForeground": true,
       "androidMode": "default",
@@ -21,15 +21,18 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.wndnos.app"
+      "bundleIdentifier": "com.wndnos.maduroh77",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/WindowLogo_512x512.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.wndnos.app",
+      "package": "com.wndnos.maduroh77",
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
@@ -37,13 +40,13 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/WindowLogo_512x512.png"
     },
     "plugins": [
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/WindowLogo_512x512.png",
           "color": "#ffffff",
           "defaultChannel": "default"
         }
