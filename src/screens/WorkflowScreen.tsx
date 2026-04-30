@@ -9,7 +9,10 @@ import {
   TextInput,
   Dimensions,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
@@ -28,13 +31,17 @@ import {
   FurnitureSystem,
   FurnitureItem,
   Handle,
+  MosquitoNetPrice,
+  ReinforcementPrice,
+  Extra,
 } from "../services/priceService";
 import { RouteProp } from "@react-navigation/native";
 import {
-  calculateWindowPrice,
+  calculateWindowPriceFromDB,
   PriceBreakdown,
-  WindowPriceConfig,
+  PriceSection,
 } from "../utils/priceCalculator";
+import { workflowDimensionsSchema } from "../validation/newOrderSchema";
 
 type WorkflowScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -47,42 +54,72 @@ interface Props {
   route: WorkflowScreenRouteProp;
 }
 
+type WndSize = { width?: number; height?: number };
+
+type DBWndSection = {
+  section_id: string;
+  width_mm: number | null;
+  height_mm: number | null;
+  opening_side: string | null;
+  opening_type: string | null;
+  has_handle: boolean | null;
+};
+
 const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
   const { isDarkMode, theme } = useTheme();
   const { orderData, isNewOrder } = route.params;
   const [orderStatus, setOrderStatus] = useState(orderData.status);
 
-  // Преобразование секций из БД в формат WindowSection
+  // Преобразование секций из БД в формат WindowSection.
+  // wnd_sections добавляется в getOrders() через select, но в типах сгенерированной схемы
+  // его нет — поэтому достаём через явное приведение, без ts-ignore.
   const loadSectionsFromDB = () => {
-    //@ts-ignore
-    const dbSections = orderData.wnd_constructions?.wnd_sections;
+    const wnd = orderData.wnd_constructions as
+      | { wnd_sections?: DBWndSection[] }
+      | undefined;
+    const dbSections = wnd?.wnd_sections;
     if (!dbSections || !Array.isArray(dbSections)) {
       return undefined;
     }
-    return dbSections.map((s: any) => ({
+    return dbSections.map((s) => ({
       id: s.section_id,
       widthMM: s.width_mm || undefined,
       heightMM: s.height_mm || undefined,
-      openingSide: s.opening_side || undefined,
-      openingType: s.opening_type || undefined,
+      openingSide: (s.opening_side || undefined) as
+        | "left"
+        | "right"
+        | "top"
+        | "bottom"
+        | "fixed"
+        | "single"
+        | undefined,
+      openingType: (s.opening_type || undefined) as
+        | "tilt_turn"
+        | "turn"
+        | "tilt"
+        | "fixed"
+        | "window"
+        | "window_with_handle"
+        | "balcony_door"
+        | undefined,
       hasHandle: s.has_handle || false,
     }));
   };
 
-  // Состояние для конфигурации окна
+  // size в БД — Json, но фактически имеет вид { width, height }.
+  const wndRow = orderData.wnd_constructions;
+  const size = (wndRow.size as WndSize | null) ?? {};
   const initialConfig: WindowConfig = {
-    //@ts-ignore
-    width: Number(orderData.wnd_constructions.size?.width) || 0,
-    //@ts-ignore
-    height: Number(orderData.wnd_constructions.size?.height) || 0,
-    glassThickness: Number(orderData.wnd_constructions.th_glass || 0),
-    openingSashType: orderData.wnd_constructions.opening_sashes || "1", // По умолчанию "Обе створки поворотные"
-    shTemplate: orderData.wnd_constructions.sh_template || "single_sash",
+    width: Number(wndRow.width_mm ?? size.width) || 0,
+    height: Number(wndRow.height_mm ?? size.height) || 0,
+    glassThickness: Number(wndRow.th_glass || 0),
+    openingSashType: wndRow.opening_sashes || "1", // По умолчанию "Обе створки поворотные"
+    shTemplate: wndRow.sh_template || "single_sash",
     price: Number(orderData.price) || 0,
     profileType: "",
     furnitureType: "",
     config: orderData.config || 1, // По умолчанию конфигурация 1
-    color: orderData.wnd_constructions.color || "white",
+    color: wndRow.color || "white",
     sections: loadSectionsFromDB(),
   };
 
@@ -104,6 +141,9 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
   const [furnitureItems, setFurnitureItems] = useState<FurnitureItem[]>([]);
   const [glassPackages, setGlassPackages] = useState<GlassPackage[]>([]);
   const [handles, setHandles] = useState<Handle[]>([]);
+  const [mosquitoNetPrices, setMosquitoNetPrices] = useState<MosquitoNetPrice[]>([]);
+  const [reinforcementPrices, setReinforcementPrices] = useState<ReinforcementPrice[]>([]);
+  const [extras, setExtras] = useState<Extra[]>([]);
   
   // Состояния для выбранных элементов
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
@@ -114,7 +154,12 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
   // Группировка профилей по системам
   const [profileSystems, setProfileSystems] = useState<string[]>([]);
   const [selectedProfileSystem, setSelectedProfileSystem] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const priceQuery = useQuery({
+    queryKey: ["priceCatalog"],
+    queryFn: () => PriceService.loadAllPriceData(),
+    staleTime: 300_000,
+  });
+  const isLoading = priceQuery.isPending;
   const [isSaving, setIsSaving] = useState(false);
   const [editorModalVisible, setEditorModalVisible] = useState(false);
   const [priceBreakdown, setPriceBreakdown] = useState<PriceBreakdown | null>(
@@ -131,52 +176,36 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const stickyOpacity = useRef(new Animated.Value(0)).current;
 
-  // Загрузка справочников через PriceService
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        const [
-          profilesData,
-          furnitureSystemsData,
-          furnitureItemsData,
-          glassPackagesData,
-          handlesData,
-        ] = await Promise.all([
-          PriceService.getProfiles(),
-          PriceService.getFurnitureSystems(),
-          PriceService.getFurnitureItems(),
-          PriceService.getGlassPackages(),
-          PriceService.getHandles(),
-        ]);
-        
-        setProfiles(profilesData);
-        setFurnitureSystems(furnitureSystemsData);
-        setFurnitureItems(furnitureItemsData);
-        setGlassPackages(glassPackagesData);
-        setHandles(handlesData);
-        
-        // Группируем профили по системам
-        const systems = [...new Set(profilesData.map(p => p.system_name).filter(Boolean))] as string[];
-        setProfileSystems(systems);
-        
-        // Устанавливаем первую систему по умолчанию
-        if (systems.length > 0 && !selectedProfileSystem) {
-          setSelectedProfileSystem(systems[0]);
-        }
-      } catch (error) {
-        console.error("Error loading data:", error);
-        Alert.alert(
-          "Ошибка",
-          "Не удалось загрузить данные справочников"
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const [dimsForPrice, setDimsForPrice] = useState({
+    w: initialConfig.width,
+    h: initialConfig.height,
+  });
 
-    loadData();
-  }, []);
+  useEffect(() => {
+    const t = setTimeout(
+      () => setDimsForPrice({ w: windowConfig.width, h: windowConfig.height }),
+      300
+    );
+    return () => clearTimeout(t);
+  }, [windowConfig.width, windowConfig.height]);
+
+  useEffect(() => {
+    const d = priceQuery.data;
+    if (!d) return;
+    setProfiles(d.profiles);
+    setFurnitureSystems(d.furnitureSystems);
+    setFurnitureItems(d.furnitureItems);
+    setGlassPackages(d.glassPackages);
+    setHandles(d.handles);
+    setMosquitoNetPrices(d.mosquitoNetPrices);
+    setReinforcementPrices(d.reinforcementPrices);
+    setExtras(d.extras);
+    const systems = [
+      ...new Set(d.profiles.map((p) => p.system_name).filter(Boolean)),
+    ] as string[];
+    setProfileSystems(systems);
+    setSelectedProfileSystem((prev) => prev ?? systems[0] ?? null);
+  }, [priceQuery.data]);
 
   // Слушатель изменений ориентации экрана
   useEffect(() => {
@@ -252,8 +281,8 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
     if (
       selectedProfileId &&
       selectedFurnitureSystemId &&
-      windowConfig.width > 0 &&
-      windowConfig.height > 0 &&
+      dimsForPrice.w > 0 &&
+      dimsForPrice.h > 0 &&
       profiles.length > 0 &&
       furnitureSystems.length > 0
     ) {
@@ -263,44 +292,70 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
       );
 
       if (selectedProfile && selectedFurnitureSystem) {
-        // Получаем системы напрямую из данных
-        const profileSystemId = selectedProfile.system_name || "FUNKE";
-        const furnitureSystemCode = selectedFurnitureSystem.code;
+        const glassThickness = windowConfig.glassThickness || 36;
+        const glassPackage =
+          glassPackages.find(
+            (g) => g.id === selectedGlassPackageId
+          ) ||
+          glassPackages.find((g) => g.thickness === glassThickness) ||
+          null;
+        const handle =
+          handles.find((h) => h.id === selectedHandleId) ||
+          handles.find((h) => h.code === "HANDLE_HOPPE") ||
+          null;
+        const balconyHandle =
+          handles.find((h) => h.code === "HANDLE_DOUBLE") || null;
 
-        const priceConfig: WindowPriceConfig = {
-          width: windowConfig.width,
-          height: windowConfig.height,
-          profile: selectedProfile,
-          profileSystemId: profileSystemId,
-          furniture: { 
-            id: selectedFurnitureSystem.id, 
-            name: selectedFurnitureSystem.name, 
-            price: 0, 
-            created_at: "",
-            code: selectedFurnitureSystem.code,
-            system_code: selectedFurnitureSystem.code,
-          },
-          furnitureSystemCode: furnitureSystemCode,
-          glassThickness: windowConfig.glassThickness || 36,
-          openingSashType: windowConfig.openingSashType,
-          shTemplate: windowConfig.shTemplate,
-          color: windowConfig.color,
-          config: windowConfig.config,
-          // Дополнительные опции
+        const sectionsForCalc: PriceSection[] | undefined =
+          windowConfig.sections?.map((s) => ({
+            id: s.id,
+            widthMM: s.widthMM ?? 0,
+            heightMM: s.heightMM ?? 0,
+            openingType: (s.openingType as PriceSection["openingType"]) || "fixed",
+            openingSide: s.openingSide,
+            hasHandle: s.hasHandle,
+          }));
+
+        const commonOptions = {
           hasMosquitoNet: false,
-          mosquitoNetColor: "white",
-          reinforcementLZ: "1.2", // Армирование LZ 1.2 мм по умолчанию
-          reinforcementT: "1.5", // Армирование T 1.5 мм по умолчанию
+          mosquitoNetColor: "white" as const,
+          reinforcementLZ: "1.2",
+          reinforcementT: "1.5",
           hasBalconyLatch: false,
           hasMicroVentilation: false,
           hasHandle: true,
           hasBalconyHandle: false,
         };
 
-        const breakdown = calculateWindowPrice(priceConfig);
+        const canUseDBCalc =
+          glassPackage != null &&
+          (selectedProfile.frame_price ?? 0) > 0 &&
+          furnitureItems.length > 0;
+
+        if (!canUseDBCalc) {
+          setPriceBreakdown(null);
+          return;
+        }
+
+        const breakdown = calculateWindowPriceFromDB({
+          width: dimsForPrice.w,
+          height: dimsForPrice.h,
+          profile: selectedProfile,
+          glassPackage: glassPackage!,
+          handle,
+          balconyHandle,
+          furnitureItems,
+          furnitureSystemId: selectedFurnitureSystem.id,
+          mosquitoNetPrices,
+          reinforcementPrices,
+          extras,
+          sections: sectionsForCalc,
+          config: windowConfig.config ?? 1,
+          options: commonOptions,
+        });
+
         setPriceBreakdown(breakdown);
 
-        // Обновляем цену в конфигурации, если нет ручного переопределения
         if (manualPriceOverride === null) {
           updateWindowConfig("price", breakdown.total);
         }
@@ -310,15 +365,24 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [
     selectedProfileId,
     selectedFurnitureSystemId,
-    windowConfig.width,
-    windowConfig.height,
+    selectedGlassPackageId,
+    selectedHandleId,
+    dimsForPrice.w,
+    dimsForPrice.h,
     windowConfig.glassThickness,
     windowConfig.openingSashType,
     windowConfig.shTemplate,
     windowConfig.color,
     windowConfig.config,
+    windowConfig.sections,
     profiles,
     furnitureSystems,
+    furnitureItems,
+    glassPackages,
+    handles,
+    mosquitoNetPrices,
+    reinforcementPrices,
+    extras,
   ]);
 
   // Обработчики изменения параметров
@@ -333,6 +397,15 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleSaveOrder = async () => {
     try {
       setIsSaving(true);
+
+      const dimCheck = workflowDimensionsSchema.safeParse({
+        width: windowConfig.width,
+        height: windowConfig.height,
+      });
+      if (!dimCheck.success) {
+        Alert.alert("Ошибка", dimCheck.error.issues[0]?.message ?? "Проверьте размеры");
+        return;
+      }
 
       // Проверяем что выбраны профиль и система фурнитуры
       if (!selectedProfileId || !selectedFurnitureSystemId) {
@@ -359,7 +432,7 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
         const orderWithConfig: OrderWithConfig = {
           customer_name: orderData.customer_name || "",
           phone_number: orderData.phone_number || "",
-          creator: orderData.creator || "system",
+          creator: orderData.creator || "",
           status: "Новый",
           price: windowConfig.price,
           config: windowConfig.config || 0,
@@ -446,8 +519,9 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   return (
-    <View
+    <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <StatusBar style={isDarkMode ? "light" : "dark"} />
 
@@ -475,6 +549,7 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={100}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Информация о заказе */}
         <View
@@ -1380,7 +1455,7 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
           setWindowConfig(newConfig);
         }}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 

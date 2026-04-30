@@ -1,7 +1,6 @@
 import { supabase } from "../lib/supabase";
-import { Database } from "../lib/supabase.types";
-import { SupabaseNotificationService } from "./supabaseNotificationService";
-import { WindowConfig, WindowSection } from "../components/WindowVisualizer";
+import { Database, Json } from "../lib/supabase.types";
+import { WindowSection } from "../components/WindowVisualizer";
 
 export type Order = Database["public"]["Tables"]["orders"]["Row"];
 export type WndConstruction =
@@ -76,15 +75,46 @@ export class OrderService {
         throw error;
       }
 
-      return data || [];
+      return (data || []) as OrderJoin;
     } catch (error) {
       console.error("Error in getOrders:", error);
       throw error;
     }
   }
 
+  // Получить заказ по ID с джойнами (как в списке заказов)
+  static async getOrderWithJoinsById(id: number): Promise<OrderWithJoins | null> {
+    try {
+      const { data, error } = await supabase
+        .from("orders")
+        .select(
+          `
+          *,
+          wnd_constructions (
+            *,
+            profiles (*),
+            furnitures (*),
+            wnd_sections (*)
+          )
+        `
+        )
+        .eq("id", id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching order with joins:", error);
+        return null;
+      }
+
+      return data as OrderWithJoins;
+    } catch (error) {
+      console.error("Error in getOrderWithJoinsById:", error);
+      return null;
+    }
+  }
+
   // Получить заказ по ID
-  static async getOrderById(id: string): Promise<Order | null> {
+  static async getOrderById(id: number): Promise<Order | null> {
     try {
       const { data, error } = await supabase
         .from("orders")
@@ -118,14 +148,6 @@ export class OrderService {
         throw error;
       }
 
-      // Отправляем уведомления о новом заказе
-      try {
-        await SupabaseNotificationService.notifyNewOrder(data);
-      } catch (notificationError) {
-        console.error("Error sending notifications:", notificationError);
-        // Не прерываем выполнение, если уведомления не отправились
-      }
-
       return data;
     } catch (error) {
       console.error("Error in createOrder:", error);
@@ -133,131 +155,66 @@ export class OrderService {
     }
   }
 
-  // Создать новый заказ с конфигурацией окна
+  // Создать новый заказ с конфигурацией окна (транзакция на стороне БД)
   static async createOrderWithConfig(
     orderData: OrderWithConfig
   ): Promise<OrderWithJoins> {
-    try {
-      // Начинаем транзакцию - сначала создаем конфигурацию окна
-      const wndConstructionData: WndConstructionInsert = {
-        profileSystem: orderData.windowConfig.profileId,
-        furniture: orderData.windowConfig.furnitureId,
-        opening_sashes: orderData.windowConfig.openingSashType.toString(),
-        th_glass:
-          orderData.windowConfig.glassThickness.toString() as Database["public"]["Enums"]["glass_thickness"],
-        size: {
-          width: orderData.windowConfig.width,
-          height: orderData.windowConfig.height,
-        },
-        sh_template: orderData.windowConfig.shTemplate,
-        color: orderData.windowConfig.color || "white",
-      };
+    const { data: sessionData } = await supabase.auth.getSession();
+    const creator =
+      sessionData.session?.user.email ??
+      sessionData.session?.user.id ??
+      "app";
 
-      // Создаем конфигурацию окна
-      const { data: wndConstruction, error: wndError } = await supabase
-        .from("wnd_constructions")
-        .insert(wndConstructionData)
-        .select()
-        .single();
+    const sections =
+      orderData.windowConfig.sections?.map((section) => ({
+        section_id: section.id,
+        width_mm: section.widthMM ?? null,
+        height_mm: section.heightMM ?? null,
+        opening_side: section.openingSide ?? null,
+        opening_type: section.openingType ?? null,
+        has_handle: section.hasHandle ?? false,
+      })) ?? [];
 
-      if (wndError) {
-        console.error("Error creating window construction:", wndError);
-        throw wndError;
-      }
+    const payload = {
+      customer_name: orderData.customer_name,
+      phone_number: orderData.phone_number,
+      creator,
+      price: orderData.price ?? null,
+      status: orderData.status ?? "Новый",
+      config: orderData.config ?? 0,
+      window: {
+        profileId: orderData.windowConfig.profileId,
+        furnitureId: orderData.windowConfig.furnitureId,
+        openingSashes: String(orderData.windowConfig.openingSashType),
+        glassThickness: String(orderData.windowConfig.glassThickness),
+        width: orderData.windowConfig.width,
+        height: orderData.windowConfig.height,
+        shTemplate: orderData.windowConfig.shTemplate,
+        color: orderData.windowConfig.color ?? "white",
+      },
+      sections,
+    };
 
-      // Создаем секции окна, если они есть
-      if (orderData.windowConfig.sections && orderData.windowConfig.sections.length > 0) {
-        const sectionsData: WndSectionInsert[] = orderData.windowConfig.sections.map(
-          (section) => ({
-            wnd_construction_id: wndConstruction.id,
-            section_id: section.id,
-            width_mm: section.widthMM || null,
-            height_mm: section.heightMM || null,
-            opening_side: section.openingSide || null,
-            opening_type: section.openingType || null,
-            has_handle: section.hasHandle || false,
-          })
-        );
+    const { data: orderId, error } = await supabase.rpc(
+      "create_order_with_config",
+      { p: payload as Json }
+    );
 
-        const { error: sectionsError } = await supabase
-          .from("wnd_sections")
-          .insert(sectionsData);
-
-        if (sectionsError) {
-          // Если секции не создались, удаляем конфигурацию окна
-          await supabase
-            .from("wnd_constructions")
-            .delete()
-            .eq("id", wndConstruction.id);
-
-          console.error("Error creating window sections:", sectionsError);
-          throw sectionsError;
-        }
-      }
-
-      // Создаем заказ со ссылкой на конфигурацию окна
-      const orderInsertData: OrderInsert = {
-        customer_name: orderData.customer_name,
-        phone_number: orderData.phone_number,
-        creator: "Приложение",
-        price: orderData.price || null,
-        status: orderData.status || "Новый",
-        config: orderData.config || 0,
-        wnd: wndConstruction.id,
-      };
-
-      const { data: order, error: orderError } = await supabase
-        .from("orders")
-        .insert(orderInsertData)
-        .select()
-        .single();
-
-      if (orderError) {
-        // Если заказ не создался, удаляем созданную конфигурацию окна (секции удалятся каскадно)
-        await supabase
-          .from("wnd_constructions")
-          .delete()
-          .eq("id", wndConstruction.id);
-
-        console.error("Error creating order:", orderError);
-        throw orderError;
-      }
-
-      // Получаем полный заказ с джойнами
-      const { data: fullOrder, error: fetchError } = await supabase
-        .from("orders")
-        .select(
-          `
-          *,
-          wnd_constructions (
-            *,
-            profiles (*),
-            furnitures (*),
-            wnd_sections (*)
-          )
-        `
-        )
-        .eq("id", order.id)
-        .single();
-
-      if (fetchError) {
-        console.error("Error fetching created order:", fetchError);
-        throw fetchError;
-      }
-
-      // Отправляем уведомления о новом заказе
-      try {
-        await SupabaseNotificationService.notifyNewOrder(order);
-      } catch (notificationError) {
-        console.error("Error sending notifications:", notificationError);
-        // Не прерываем выполнение, если уведомления не отправились
-      }
-
-      return fullOrder as OrderWithJoins;
-    } catch (error) {
-      console.error("Error in createOrderWithConfig:", error);
+    if (error) {
+      console.error("Error in create_order_with_config RPC:", error);
       throw error;
     }
+
+    const id = Number(orderId);
+    if (!Number.isFinite(id)) {
+      throw new Error("create_order_with_config returned no id");
+    }
+
+    const full = await this.getOrderWithJoinsById(id);
+    if (!full) {
+      throw new Error("Order not found after create");
+    }
+    return full;
   }
 
   // Обновить заказ
@@ -316,22 +273,6 @@ export class OrderService {
       console.error("Error in getOrdersByStatus:", error);
       throw error;
     }
-  }
-
-  // Подписаться на изменения заказов в реальном времени
-  static subscribeToOrders(callback: (payload: any) => void) {
-    return supabase
-      .channel("orders_changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-        },
-        callback
-      )
-      .subscribe();
   }
 
   // Получить все профили
@@ -419,6 +360,8 @@ export class OrderService {
           width: configData.width,
           height: configData.height,
         },
+        width_mm: configData.width,
+        height_mm: configData.height,
         sh_template: configData.shTemplate,
         color: configData.color || "white",
       };

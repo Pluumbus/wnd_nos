@@ -389,6 +389,7 @@ export type Database = {
         Row: {
           config: number;
           created_at: string;
+          created_by: string | null;
           creator: string;
           customer_name: string | null;
           id: number;
@@ -400,6 +401,7 @@ export type Database = {
         Insert: {
           config?: number;
           created_at?: string;
+          created_by?: string | null;
           creator?: string;
           customer_name?: string | null;
           id?: number;
@@ -411,6 +413,7 @@ export type Database = {
         Update: {
           config?: number;
           created_at?: string;
+          created_by?: string | null;
           creator?: string;
           customer_name?: string | null;
           id?: number;
@@ -511,35 +514,44 @@ export type Database = {
         Row: {
           color: string;
           created_at: string;
+          created_by: string | null;
           furniture: number | null;
+          height_mm: number | null;
           id: number;
           opening_sashes: string | null;
           profileSystem: number;
           sh_template: string;
           size: Json;
           th_glass: Database["public"]["Enums"]["glass_thickness"] | null;
+          width_mm: number | null;
         };
         Insert: {
           color?: string;
           created_at?: string;
+          created_by?: string | null;
           furniture?: number | null;
+          height_mm?: number | null;
           id?: number;
           opening_sashes?: string | null;
           profileSystem: number;
           sh_template?: string;
           size?: Json;
           th_glass?: Database["public"]["Enums"]["glass_thickness"] | null;
+          width_mm?: number | null;
         };
         Update: {
           color?: string;
           created_at?: string;
+          created_by?: string | null;
           furniture?: number | null;
+          height_mm?: number | null;
           id?: number;
           opening_sashes?: string | null;
           profileSystem?: number;
           sh_template?: string;
           size?: Json;
           th_glass?: Database["public"]["Enums"]["glass_thickness"] | null;
+          width_mm?: number | null;
         };
         Relationships: [
           {
@@ -607,6 +619,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      create_order_with_config: {
+        Args: { p: Json };
+        Returns: number;
+      };
       bytea_to_text: {
         Args: { data: string };
         Returns: string;

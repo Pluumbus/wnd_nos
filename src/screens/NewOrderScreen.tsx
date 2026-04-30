@@ -14,6 +14,8 @@ import { StatusBar } from "expo-status-bar";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
+import { newOrderCustomerSchema } from "../validation/newOrderSchema";
+import type { OrderWithJoins } from "../services/orderService";
 
 type NewOrderScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -35,48 +37,71 @@ const NewOrderScreen: React.FC<Props> = ({ navigation }) => {
     navigation.goBack();
   };
   const handleCreateOrder = () => {
-    if (!customerName.trim() || !customerPhone.trim()) {
-      Alert.alert("Ошибка", "Пожалуйста, заполните все поля");
+    const parsed = newOrderCustomerSchema.safeParse({
+      customerName,
+      customerPhone,
+    });
+    if (!parsed.success) {
+      Alert.alert("Ошибка", parsed.error.issues[0]?.message ?? "Проверьте поля");
       return;
     }
 
     handleCancel();
-    // Переход к workflow screen с данными клиента
-    navigation.navigate("Workflow", {
-      orderData: {
+    const { customerName: name, customerPhone: phone } = parsed.data;
+
+    const orderData = {
+      created_at: new Date().toISOString(),
+      creator: "",
+      customer_name: name,
+      id: 0,
+      phone_number: phone,
+      price: null,
+      status: "Новый",
+      wnd: null,
+      config: 1,
+      created_by: null,
+      wnd_constructions: {
         created_at: new Date().toISOString(),
-        creator: "",
-        customer_name: customerName.trim(),
         id: 0,
-        phone_number: customerPhone.trim(),
-        price: null,
-        status: "Новый",
-        wnd: null,
-        config: 1,
-        wnd_constructions: {
-          created_at: new Date().toISOString(),
+        created_by: null,
+        furniture: 0,
+        opening_sashes: "1",
+        profileSystem: 0,
+        sh_template: "single_sash",
+        size: { width: 1200, height: 1400 },
+        width_mm: 1200,
+        height_mm: 1400,
+        th_glass: "24",
+        color: "white",
+        profiles: {
           id: 0,
-          furniture: 0,
-          opening_sashes: "1",
-          profileSystem: 0,
-          sh_template: "single_sash",
-          size: { width: 1200, height: 1400 },
-          th_glass: "24",
-          color: "white",
-          profiles: {
-            id: 0,
-            name: "",
-            created_at: new Date().toISOString(),
-            price: 0,
-          },
-          furnitures: {
-            id: 0,
-            name: "",
-            created_at: new Date().toISOString(),
-            price: 0,
-          },
+          name: "",
+          created_at: new Date().toISOString(),
+          price: 0,
+          depth: null,
+          code: null,
+          frame_price: 0,
+          sash_price: 0,
+          impost_price: 0,
+          shtulp_price: null,
+          door_frame_price: null,
+          door_sash_price: null,
+          threshold_price: null,
+          system_name: null,
+        },
+        furnitures: {
+          id: 0,
+          name: "",
+          created_at: new Date().toISOString(),
+          price: 0,
+          code: null,
+          system_code: null,
         },
       },
+    } as OrderWithJoins;
+
+    navigation.navigate("Workflow", {
+      orderData,
       isNewOrder: true,
     });
   };

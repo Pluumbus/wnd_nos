@@ -1,15 +1,13 @@
-import { Profile, Furniture } from "../services/orderService";
-import {
-  getProfilePrices,
-  getGlassPackageByThickness,
-  getFurnitureForSashSize,
-  calculateFurnitureCost,
-  calculateMosquitoNetCost,
-  calculateReinforcementCost,
-  HANDLES,
-  ALL_PROFILES,
-  type ProfilePriceItem,
-} from "./prices";
+import type { Database } from "../lib/supabase.types";
+import type { ComputedSection } from "./windowConfigurations";
+
+type DBProfile = Database["public"]["Tables"]["profiles"]["Row"];
+type DBGlassPackage = Database["public"]["Tables"]["glass_packages"]["Row"];
+type DBFurnitureItem = Database["public"]["Tables"]["furniture_items"]["Row"];
+type DBHandle = Database["public"]["Tables"]["handles"]["Row"];
+type DBMosquitoNet = Database["public"]["Tables"]["mosquito_net_prices"]["Row"];
+type DBReinforcement = Database["public"]["Tables"]["reinforcement_prices"]["Row"];
+type DBExtra = Database["public"]["Tables"]["extras"]["Row"];
 
 export interface PriceBreakdown {
   profilePrice: number; // Цена профиля (рама + створка)
@@ -24,33 +22,6 @@ export interface PriceBreakdown {
   total: number; // Итоговая цена (без скидки - скидка ручная)
 }
 
-export interface WindowPriceConfig {
-  width: number; // Ширина в мм
-  height: number; // Высота в мм
-  profile: Profile | null; // Профиль (из БД)
-  profileSystemId?: string; // ID системы профиля (FUNKE_58, FUNKE_70 и т.д.)
-  furniture: Furniture | null; // Фурнитура (из БД)
-  furnitureSystemCode?: string; // Код системы фурнитуры (FUTURUS, ELEMENTS, UPT)
-  glassThickness: number; // Толщина стекла в мм
-  glassCode?: string; // Код стеклопакета (SPD_36, SPD_36_I и т.д.)
-  openingSashType: string; // Тип открывания створок
-  shTemplate: string; // Шаблон окна
-  color?: string; // Цвет
-  config?: number; // Конфигурация окна (1-21)
-  // Дополнительные опции
-  hasMosquitoNet?: boolean; // Москитка
-  mosquitoNetColor?: "white" | "brown"; // Цвет москитки
-  reinforcementLZ?: string; // Армирование LZ (например "1.2")
-  reinforcementT?: string; // Армирование T (например "1.5")
-  hasBalconyLatch?: boolean; // Балконная защелка
-  hasMicroVentilation?: boolean; // Микропроветривание
-  hasHandle?: boolean; // Ручка
-  hasBalconyHandle?: boolean; // Балконная ручка
-  // Импосты
-  impostCount?: number; // Количество импостов
-  impostLengths?: number[]; // Длины импостов в мм (для точного расчёта)
-}
-
 /**
  * Рассчитывает площадь окна в квадратных метрах
  */
@@ -63,48 +34,6 @@ export function calculateArea(width: number, height: number): number {
  */
 export function calculatePerimeter(width: number, height: number): number {
   return (2 * (width + height)) / 1000; // Конвертация из мм в м
-}
-
-/**
- * Определяет ID системы профиля на основе Profile из БД
- */
-export function getProfileSystemId(profile: Profile | null): string {
-  if (!profile) return "FUNKE_58";
-  
-  const name = profile.name?.toUpperCase() || "";
-  
-  if (name.includes("FUNKE")) {
-    // Определяем по ID или имени
-    if (name.includes("70") || profile.id === 5) return "FUNKE_70";
-    return "FUNKE_58";
-  }
-  if (name.includes("VEKTOR")) {
-    if (name.includes("70")) return "VEKTOR_70";
-    return "VEKTOR_58";
-  }
-  if (name.includes("EXPROF")) {
-    if (name.includes("80")) return "EXPROF_80";
-    if (name.includes("70")) return "EXPROF_70";
-    return "EXPROF_58";
-  }
-  
-  return "FUNKE_58"; // По умолчанию
-}
-
-/**
- * Определяет код системы фурнитуры на основе Furniture из БД
- */
-export function getFurnitureSystemCode(furniture: Furniture | null): string {
-  if (!furniture) return "FUTURUS";
-  
-  const name = furniture.name?.toUpperCase() || "";
-  
-  if (name.includes("FUTURUS")) return "FUTURUS";
-  if (name.includes("ELEMENTS")) return "ELEMENTS";
-  if (name.includes("UPT")) return "UPT";
-  if (name.includes("ACTIVE") || name.includes("PILOT")) return "WH_ACTIVE_PILOT";
-  
-  return "FUTURUS"; // По умолчанию
 }
 
 /**
@@ -167,192 +96,357 @@ export function calculateImpostLength(
   return verticalLength + horizontalLength;
 }
 
-/**
- * Рассчитывает цену профиля
- */
-export function calculateProfilePrice(
-  profileSystemId: string,
-  area: number
-): number {
-  const profilePrices = getProfilePrices(profileSystemId);
-  if (!profilePrices) return 0;
+// ============================================================================
+//                      РАСЧЁТ НА ОСНОВЕ ДАННЫХ ИЗ БД
+// ============================================================================
 
-  // Профиль рамы + профиль створки за кв.м.
-  return (profilePrices.frame + profilePrices.sash) * area;
+/**
+ * Тип секции для расчёта (упрощённый ComputedSection)
+ */
+export interface PriceSection {
+  id: string;
+  widthMM: number;
+  heightMM: number;
+  openingType: "tilt_turn" | "turn" | "tilt" | "fixed";
+  openingSide?: string;
+  hasHandle?: boolean;
 }
 
 /**
- * Рассчитывает цену импостов
+ * Опции окна (флаги дополнительных компонентов)
  */
-export function calculateImpostPrice(
-  profileSystemId: string,
-  impostLengthM: number
-): number {
-  const profilePrices = getProfilePrices(profileSystemId);
-  if (!profilePrices) return 0;
-
-  return profilePrices.impost * impostLengthM;
+export interface WindowOptions {
+  hasMosquitoNet?: boolean;
+  mosquitoNetColor?: "white" | "brown";
+  reinforcementLZ?: string; // "1.2" | "1.5" | "2.0"
+  reinforcementT?: string;
+  hasBalconyLatch?: boolean;
+  hasMicroVentilation?: boolean;
+  hasHandle?: boolean;
+  hasBalconyHandle?: boolean;
 }
 
 /**
- * Рассчитывает цену фурнитуры
- * Автоподбор комплектующих по размеру створки
+ * Входные данные для расчёта на основе БД.
+ * Все цены берутся из переданных рядов БД.
  */
-export function calculateFurniturePrice(
-  furnitureSystemCode: string,
+export interface DBPriceInputs {
+  width: number; // мм
+  height: number; // мм
+  profile: DBProfile;
+  glassPackage: DBGlassPackage;
+  handle?: DBHandle | null;
+  balconyHandle?: DBHandle | null;
+  furnitureItems: DBFurnitureItem[]; // только для нужной системы
+  furnitureSystemId: number;
+  mosquitoNetPrices?: DBMosquitoNet[];
+  reinforcementPrices?: DBReinforcement[];
+  extras?: DBExtra[];
+  sections?: PriceSection[] | ComputedSection[];
+  config: number;
+  options: WindowOptions;
+}
+
+/**
+ * Реальная длина импостов на основе секций.
+ * Если секции не заданы — используем верхнеуровневую конфигурацию.
+ */
+export function calculateImpostLengthFromSections(
+  width: number,
+  height: number,
+  sections: PriceSection[] | undefined,
+  config: number
+): number {
+  if (!sections || sections.length === 0) {
+    return calculateImpostLength(width, height, config);
+  }
+
+  // Считаем по реальным секциям: уникальные вертикальные/горизонтальные импосты.
+  // Длина вертикального импоста = высота окна; длина горизонтального = ширина окна.
+  // Получаем количество импостов из конфигурации.
+  const details = getConfigurationDetails(config);
+  const verticalLength = (details.verticalImposts * height) / 1000;
+  const horizontalLength = (details.horizontalImposts * width) / 1000;
+  return verticalLength + horizontalLength;
+}
+
+/**
+ * Подбор элемента фурнитуры по размеру (для drive/scissors/lock и др. размерных категорий)
+ */
+function pickItemBySize(
+  items: DBFurnitureItem[],
+  size: number
+): DBFurnitureItem | null {
+  const matched = items.find(
+    (i) =>
+      i.min_size != null &&
+      i.max_size != null &&
+      size >= i.min_size &&
+      size <= i.max_size
+  );
+  if (matched) return matched;
+  // Fallback: ближайший по диапазону
+  const withRange = items.filter(
+    (i) => i.min_size != null && i.max_size != null
+  );
+  if (withRange.length === 0) return items[0] || null;
+  return withRange.reduce((best, cur) => {
+    const center = (cur.min_size! + cur.max_size!) / 2;
+    const bestCenter = (best.min_size! + best.max_size!) / 2;
+    return Math.abs(center - size) < Math.abs(bestCenter - size) ? cur : best;
+  });
+}
+
+/**
+ * Стоимость комплекта фурнитуры на одну открываемую створку.
+ * Комплект формируется из drive (по высоте), scissors (по ширине, для tilt/tilt_turn),
+ * corner, набора hinge (4 шт.), плюс необязательный mid_lock по высоте.
+ */
+export function calculateFurnitureSetCostFromDB(
+  furnitureItems: DBFurnitureItem[],
+  systemId: number,
   sashWidth: number,
   sashHeight: number,
-  openableSashCount: number = 1
+  openingType: "tilt_turn" | "turn" | "tilt" | "fixed"
 ): number {
-  // Получаем комплект фурнитуры для одной створки
-  const items = getFurnitureForSashSize(
-    furnitureSystemCode,
-    sashHeight,
-    sashWidth,
-    true // поворотно-откидная
+  if (openingType === "fixed") return 0;
+
+  const systemItems = furnitureItems.filter((i) => i.system_id === systemId);
+  if (systemItems.length === 0) return 0;
+
+  let total = 0;
+
+  // Drive — обязательный элемент, размер по высоте створки
+  const drives = systemItems.filter((i) => i.category === "drive");
+  const drive = pickItemBySize(drives, sashHeight);
+  if (drive) total += drive.price;
+
+  // Scissors нужны для откидных и поворотно-откидных, размер по ширине створки
+  if (openingType === "tilt_turn" || openingType === "tilt") {
+    const scissors = systemItems.filter(
+      (i) => i.category === "scissors" && !i.code.includes("CORNER")
+    );
+    const sc = pickItemBySize(scissors, sashWidth);
+    if (sc) total += sc.price;
+  }
+
+  // Corner gear (стандарт)
+  const corner = systemItems.find(
+    (i) => i.category === "corner" && !i.code.toUpperCase().includes("NARROW")
   );
-  
-  // Стоимость одного комплекта умножаем на количество открываемых створок
-  const singleSetCost = calculateFurnitureCost(items);
-  
-  return singleSetCost * openableSashCount;
+  if (corner) total += corner.price;
+
+  // Mid-lock (если есть в системе) — по высоте
+  const midLocks = systemItems.filter(
+    (i) => i.category === "lock" && i.min_size != null && i.max_size != null
+  );
+  const midLock = pickItemBySize(midLocks, sashHeight);
+  if (midLock) total += midLock.price;
+
+  // Петли: верх рамы, верх створки, низ рамы, низ створки — по одной из каждой группы
+  const hinges = systemItems.filter((i) => i.category === "hinge");
+  const groupCodes = [
+    "HINGE_FRAME_TOP",
+    "HINGE_SASH_TOP",
+    "HINGE_FRAME_BOTTOM",
+    "HINGE_SASH_BOTTOM",
+  ];
+  for (const grp of groupCodes) {
+    const hinge = hinges.find((h) => h.code.includes(grp));
+    if (hinge) total += hinge.price;
+  }
+
+  return total;
 }
 
 /**
- * Рассчитывает цену стеклопакета
+ * Стоимость москитной сетки по данным БД.
+ * Цена = периметр × frame_price + площадь × mesh_price.
  */
-export function calculateGlassPrice(
-  glassThickness: number,
-  area: number,
-  glassCode?: string
+export function calculateMosquitoNetCostFromDB(
+  width: number,
+  height: number,
+  prices: DBMosquitoNet[],
+  color: "white" | "brown" = "white"
 ): number {
-  // Если указан код, используем его
-  // Пока используем поиск по толщине
-  const glassPackage = getGlassPackageByThickness(glassThickness);
-  if (!glassPackage) {
-    // Если не нашли, используем базовую цену
-    const defaultPrices: { [key: number]: number } = {
-      24: 14100,
-      32: 18520,
-      36: 19100,
-      40: 19900,
-      42: 20100,
-      44: 20100,
-    };
-    return (defaultPrices[glassThickness] || 19100) * area;
-  }
-
-  return glassPackage.price * area;
+  const perimeterM = calculatePerimeter(width, height);
+  const areaSqm = calculateArea(width, height);
+  const frameCode = color === "brown" ? "frame_brown" : "frame_white";
+  const frame = prices.find((p) => p.component === frameCode);
+  const mesh = prices.find((p) => p.component === "mesh");
+  const framePrice = frame?.price ?? 0;
+  const meshPrice = mesh?.price ?? 0;
+  return perimeterM * framePrice + areaSqm * meshPrice;
 }
 
 /**
- * Рассчитывает цену ручки
+ * Стоимость армирования по данным БД (LZ + T применяются вместе по периметру).
  */
-export function calculateHandlePrice(hasHandle: boolean): number {
-  if (!hasHandle) return 0;
-  
-  // Базовая ручка Hoppe
-  const hoppeHandle = HANDLES.find((h) => h.code === "HANDLE_HOPPE");
-  return hoppeHandle?.price || 1200;
-}
-
-/**
- * Рассчитывает цену дополнительных опций
- */
-export function calculateOptionsPrice(
-  config: WindowPriceConfig,
-  area: number,
-  perimeterM: number
+export function calculateReinforcementCostFromDB(
+  perimeterM: number,
+  prices: DBReinforcement[],
+  lzThickness?: string,
+  tThickness?: string
 ): number {
-  let optionsPrice = 0;
-
-  // Балконная защелка
-  if (config.hasBalconyLatch) {
-    optionsPrice += 2972; // BALCONY_LATCHES.standard
+  let total = 0;
+  if (lzThickness) {
+    const lz = prices.find(
+      (p) => p.profile_type === "LZ" && p.thickness === lzThickness
+    );
+    if (lz) total += lz.price * perimeterM;
   }
-
-  // Микропроветривание
-  if (config.hasMicroVentilation) {
-    optionsPrice += 495; // MICRO_VENTILATION_PRICE
+  if (tThickness) {
+    const t = prices.find(
+      (p) => p.profile_type === "T" && p.thickness === tThickness
+    );
+    if (t) total += t.price * perimeterM;
   }
-
-  // Балконная ручка
-  if (config.hasBalconyHandle) {
-    const balconyHandle = HANDLES.find((h) => h.code === "HANDLE_DOUBLE");
-    optionsPrice += balconyHandle?.price || 4600;
-  }
-
-  return optionsPrice;
+  return total;
 }
 
 /**
- * Основная функция расчета цены окна
+ * Стоимость доп. опций (защелки, микропроветривание) по данным БД.
  */
-export function calculateWindowPrice(
-  config: WindowPriceConfig
+export function calculateExtrasCostFromDB(
+  options: WindowOptions,
+  extras: DBExtra[] | undefined,
+  balconyHandle?: DBHandle | null
+): number {
+  let total = 0;
+  if (!extras) return total;
+
+  if (options.hasBalconyLatch) {
+    const latch = extras.find(
+      (e) => e.category === "balcony" && e.code.includes("STD")
+    ) || extras.find((e) => e.category === "balcony");
+    if (latch) total += latch.price;
+  }
+  if (options.hasMicroVentilation) {
+    const mv = extras.find((e) => e.category === "ventilation");
+    if (mv) total += mv.price;
+  }
+  if (options.hasBalconyHandle && balconyHandle) {
+    total += balconyHandle.price;
+  }
+  return total;
+}
+
+/**
+ * Главная функция расчёта на основе данных из БД.
+ * Учитывает реальные секции (если переданы), цены профиля из БД, реальный
+ * стеклопакет, фурнитуру по системе и реальным размерам створок.
+ *
+ * Структура итогов соответствует тому, как считается коммерческое
+ * предложение: профиль (рама+створка+импост), стеклопакет, фурнитура,
+ * ручка, опции, москитка, армирование.
+ */
+export function calculateWindowPriceFromDB(
+  inputs: DBPriceInputs
 ): PriceBreakdown {
-  const area = calculateArea(config.width, config.height);
-  const perimeterM = calculatePerimeter(config.width, config.height);
-  
-  // Получаем детали конфигурации
-  const configDetails = getConfigurationDetails(config.config || 1);
-  const impostLengthM = calculateImpostLength(
-    config.width,
-    config.height,
-    config.config || 1
+  const {
+    width,
+    height,
+    profile,
+    glassPackage,
+    handle,
+    balconyHandle,
+    furnitureItems,
+    furnitureSystemId,
+    mosquitoNetPrices,
+    reinforcementPrices,
+    extras,
+    sections,
+    config,
+    options,
+  } = inputs;
+
+  const area = calculateArea(width, height);
+  const perimeterM = calculatePerimeter(width, height);
+
+  // ---------- Профиль (рама + створка по площади + импост по фактической длине)
+  const framePrice = (profile.frame_price ?? profile.price ?? 0) * area;
+  const sashPrice = (profile.sash_price ?? 0) * area;
+  const profilePrice = framePrice + sashPrice;
+
+  const impostLengthM = calculateImpostLengthFromSections(
+    width,
+    height,
+    sections as PriceSection[] | undefined,
+    config
+  );
+  const impostPrice = (profile.impost_price ?? 0) * impostLengthM;
+
+  // ---------- Стеклопакет
+  const glassPrice = glassPackage.price * area;
+
+  // ---------- Фурнитура: считаем по каждой открываемой секции
+  let furniturePrice = 0;
+  const sectionList = (sections as PriceSection[] | undefined) ?? [];
+  const openableSections = sectionList.filter(
+    (s) => s.openingType && s.openingType !== "fixed"
   );
 
-  // Определяем системы
-  const profileSystemId = config.profileSystemId || getProfileSystemId(config.profile);
-  const furnitureSystemCode = config.furnitureSystemCode || getFurnitureSystemCode(config.furniture);
+  if (openableSections.length > 0) {
+    for (const s of openableSections) {
+      furniturePrice += calculateFurnitureSetCostFromDB(
+        furnitureItems,
+        furnitureSystemId,
+        s.widthMM,
+        s.heightMM,
+        s.openingType
+      );
+    }
+  } else {
+    // Фолбэк: если секций нет, считаем по конфигурации (1 открываемая створка)
+    const details = getConfigurationDetails(config);
+    const sashWidth = width / Math.max(details.sashCount, 1);
+    const sashHeight = height; // нет данных о горизонтальных импостах
+    const single = calculateFurnitureSetCostFromDB(
+      furnitureItems,
+      furnitureSystemId,
+      sashWidth,
+      sashHeight,
+      "tilt_turn"
+    );
+    furniturePrice = single * details.openableSashes;
+  }
 
-  // Примерный размер одной створки (для расчёта фурнитуры)
-  const avgSashWidth = config.width / Math.max(configDetails.sashCount, 1);
-  const avgSashHeight = config.height;
+  // ---------- Ручка (только если открывается хотя бы одна секция)
+  const hasOpenable =
+    openableSections.length > 0 ||
+    getConfigurationDetails(config).openableSashes > 0;
+  const handlePrice =
+    options.hasHandle !== false && hasOpenable && handle ? handle.price : 0;
 
-  // Рассчитываем компоненты цены
-  const profilePrice = calculateProfilePrice(profileSystemId, area);
-  const impostPrice = calculateImpostPrice(profileSystemId, impostLengthM);
-  
-  const furniturePrice = calculateFurniturePrice(
-    furnitureSystemCode,
-    avgSashWidth,
-    avgSashHeight,
-    configDetails.openableSashes
-  );
-
-  const glassPrice = calculateGlassPrice(
-    config.glassThickness,
-    area,
-    config.glassCode
-  );
-
-  const handlePrice = calculateHandlePrice(config.hasHandle !== false);
-
-  // Москитка
+  // ---------- Москитка
   let mosquitoNetPrice = 0;
-  if (config.hasMosquitoNet) {
-    mosquitoNetPrice = calculateMosquitoNetCost(
-      config.width,
-      config.height,
-      config.mosquitoNetColor || "white"
+  if (options.hasMosquitoNet && mosquitoNetPrices) {
+    mosquitoNetPrice = calculateMosquitoNetCostFromDB(
+      width,
+      height,
+      mosquitoNetPrices,
+      options.mosquitoNetColor || "white"
     );
   }
 
-  // Армирование
+  // ---------- Армирование
   let reinforcementPrice = 0;
-  if (config.reinforcementLZ || config.reinforcementT) {
-    reinforcementPrice = calculateReinforcementCost(
+  if (
+    reinforcementPrices &&
+    (options.reinforcementLZ || options.reinforcementT)
+  ) {
+    reinforcementPrice = calculateReinforcementCostFromDB(
       perimeterM,
-      config.reinforcementLZ,
-      config.reinforcementT
+      reinforcementPrices,
+      options.reinforcementLZ,
+      options.reinforcementT
     );
   }
 
-  // Дополнительные опции
-  const optionsPrice = calculateOptionsPrice(config, area, perimeterM);
+  // ---------- Доп. опции
+  const optionsPrice = calculateExtrasCostFromDB(options, extras, balconyHandle);
 
-  // Промежуточная сумма
+  // ---------- Итого
   const subtotal =
     profilePrice +
     impostPrice +
@@ -363,48 +457,17 @@ export function calculateWindowPrice(
     reinforcementPrice +
     optionsPrice;
 
-  // Итоговая цена (скидка убрана - вводится вручную)
-  const total = subtotal;
-
+  const round = (n: number) => Math.round(n * 100) / 100;
   return {
-    profilePrice: Math.round(profilePrice * 100) / 100,
-    impostPrice: Math.round(impostPrice * 100) / 100,
-    furniturePrice: Math.round(furniturePrice * 100) / 100,
-    glassPrice: Math.round(glassPrice * 100) / 100,
-    handlePrice: Math.round(handlePrice * 100) / 100,
-    mosquitoNetPrice: Math.round(mosquitoNetPrice * 100) / 100,
-    reinforcementPrice: Math.round(reinforcementPrice * 100) / 100,
-    optionsPrice: Math.round(optionsPrice * 100) / 100,
-    subtotal: Math.round(subtotal * 100) / 100,
-    total: Math.round(total * 100) / 100,
+    profilePrice: round(profilePrice),
+    impostPrice: round(impostPrice),
+    furniturePrice: round(furniturePrice),
+    glassPrice: round(glassPrice),
+    handlePrice: round(handlePrice),
+    mosquitoNetPrice: round(mosquitoNetPrice),
+    reinforcementPrice: round(reinforcementPrice),
+    optionsPrice: round(optionsPrice),
+    subtotal: round(subtotal),
+    total: round(subtotal),
   };
-}
-
-/**
- * Быстрый расчёт цены по основным параметрам
- * Упрощённая версия для предварительной оценки
- */
-export function quickCalculatePrice(
-  width: number,
-  height: number,
-  profileSystemId: string = "FUNKE_70",
-  glassThickness: number = 36,
-  config: number = 1
-): number {
-  const priceConfig: WindowPriceConfig = {
-    width,
-    height,
-    profile: null,
-    profileSystemId,
-    furniture: null,
-    furnitureSystemCode: "FUTURUS",
-    glassThickness,
-    openingSashType: "1",
-    shTemplate: "single_sash",
-    config,
-    hasHandle: true,
-  };
-
-  const breakdown = calculateWindowPrice(priceConfig);
-  return breakdown.total;
 }

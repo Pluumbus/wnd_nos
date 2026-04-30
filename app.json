@@ -20,6 +20,7 @@
       "androidCollapsedTitle": "#{unread_notifications} new interactions"
     },
     "ios": {
+      "buildNumber": "2",
       "supportsTablet": true,
       "bundleIdentifier": "com.wndnos.maduroh77",
       "infoPlist": {
@@ -50,7 +51,8 @@
           "color": "#ffffff",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "extra": {
       "eas": {

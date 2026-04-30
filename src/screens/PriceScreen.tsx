@@ -10,6 +10,8 @@ import {
   Alert,
   Modal,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
@@ -862,6 +864,7 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
       >
         {renderContent()}
       </ScrollView>
@@ -873,7 +876,10 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
         animationType="fade"
         onRequestClose={() => setEditModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
               Изменить цену
@@ -924,7 +930,7 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

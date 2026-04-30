@@ -4,17 +4,17 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   Alert,
   RefreshControl,
+  FlatList,
+  ListRenderItem,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
 import { useOrders } from "../hooks/useOrders";
-import { Database } from "../lib/supabase.types";
 import { Order, OrderJoin } from "../services/orderService";
 
 type OrdersScreenNavigationProp = StackNavigationProp<
@@ -84,6 +84,85 @@ const OrdersScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  const renderOrder: ListRenderItem<OrderJoin[number]> = ({ item: order }) => (
+    <TouchableOpacity
+      style={[
+        styles.orderCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+        },
+      ]}
+      onPress={() => handleOrderPress(order)}
+    >
+      <View style={styles.orderHeader}>
+        <Text style={[styles.orderNumber, { color: theme.colors.text }]}>
+          Номер заказа: {order.id}
+        </Text>
+        <View
+          style={[
+            styles.statusBadge,
+            { backgroundColor: getStatusColor(order.status || "") },
+          ]}
+        >
+          <Text style={styles.statusText}>{order.status}</Text>
+        </View>
+      </View>
+
+      <View style={styles.orderDetails}>
+        <Text style={[styles.customerName, { color: theme.colors.text }]}>
+          {order.customer_name}
+        </Text>
+        <Text
+          style={[styles.orderDate, { color: theme.colors.textSecondary }]}
+        >
+          {new Date(order.created_at).toLocaleDateString("ru-RU")}
+        </Text>
+        <Text
+          style={[styles.orderDate, { color: theme.colors.textSecondary }]}
+        >
+          Источник: {order.creator}
+        </Text>
+      </View>
+
+      <View style={styles.orderFooter}>
+        <Text style={[styles.orderTotal, { color: theme.colors.text }]}>
+          {order.price?.toLocaleString()} Тг
+        </Text>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[
+              styles.deleteButton,
+              { backgroundColor: theme.colors.primary },
+            ]}
+            onPress={() => handleDeleteOrder(order)}
+          >
+            <Text style={styles.deleteButtonText}>Удалить</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const listHeader = loading ? (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color={theme.colors.primary} />
+    </View>
+  ) : error ? (
+    <View style={styles.errorContainer}>
+      <Text style={[styles.errorText, { color: theme.colors.primary }]}>{error}</Text>
+    </View>
+  ) : null;
+
+  const listEmpty =
+    !loading && !error && orders.length === 0 ? (
+    <View style={styles.emptyContainer}>
+      <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+        Заказов пока нет
+      </Text>
+    </View>
+  ) : null;
+
   return (
     <View
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -120,9 +199,11 @@ const OrdersScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       {/* Orders List */}
-      <ScrollView
+      <FlatList
         style={styles.ordersContainer}
-        showsVerticalScrollIndicator={false}
+        data={orders}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderOrder}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -131,101 +212,9 @@ const OrdersScreen: React.FC<Props> = ({ navigation }) => {
             tintColor={theme.colors.primary}
           />
         }
-      >
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            {/* <Text style={[styles.loadingText, { color: theme.colors.text }]}>
-              Загрузка заказов...
-            </Text> */}
-          </View>
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <Text style={[styles.errorText, { color: theme.colors.primary }]}>
-              {error}
-            </Text>
-          </View>
-        ) : orders.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text
-              style={[styles.emptyText, { color: theme.colors.textSecondary }]}
-            >
-              Заказов пока нет
-            </Text>
-          </View>
-        ) : (
-          orders.map((order) => (
-            <TouchableOpacity
-              key={order.id}
-              style={[
-                styles.orderCard,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-              onPress={() => handleOrderPress(order)}
-            >
-              <View style={styles.orderHeader}>
-                <Text
-                  style={[styles.orderNumber, { color: theme.colors.text }]}
-                >
-                  Номер заказа: {order.id}
-                </Text>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    { backgroundColor: getStatusColor(order.status || "") },
-                  ]}
-                >
-                  <Text style={styles.statusText}>{order.status}</Text>
-                </View>
-              </View>
-
-              <View style={styles.orderDetails}>
-                <Text
-                  style={[styles.customerName, { color: theme.colors.text }]}
-                >
-                  {order.customer_name}
-                </Text>
-                <Text
-                  style={[
-                    styles.orderDate,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  {new Date(order.created_at).toLocaleDateString("ru-RU")}
-                </Text>
-                <Text
-                  style={[
-                    styles.orderDate,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Источник: {order.creator}
-                </Text>
-              </View>
-
-              <View style={styles.orderFooter}>
-                <Text style={[styles.orderTotal, { color: theme.colors.text }]}>
-                  {order.price?.toLocaleString()} Тг
-                </Text>
-                <View style={styles.buttonContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.deleteButton,
-                      { backgroundColor: theme.colors.primary },
-                    ]}
-                    onPress={() => handleDeleteOrder(order)}
-                  >
-                    <Text style={styles.deleteButtonText}>Удалить</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={listEmpty}
+      />
     </View>
   );
 };

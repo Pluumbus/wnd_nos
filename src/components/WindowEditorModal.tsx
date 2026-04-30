@@ -9,6 +9,8 @@ import {
   ScrollView,
   TextInput,
   TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import Svg, { Rect, Line, G, Text as SvgText, Circle } from "react-native-svg";
 import { useTheme } from "../context/ThemeContext";
@@ -100,7 +102,10 @@ const SashTypeModal: React.FC<SashTypeModalProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <View
           style={[
             styles.modalContent,
@@ -269,7 +274,7 @@ const SashTypeModal: React.FC<SashTypeModalProps> = ({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -557,8 +562,9 @@ const WindowEditorModal: React.FC<WindowEditorModalProps> = ({
       presentationStyle="fullScreen"
       onRequestClose={handleClose}
     >
-      <View
+      <KeyboardAvoidingView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         {/* Header */}
         <View
@@ -581,6 +587,7 @@ const WindowEditorModal: React.FC<WindowEditorModalProps> = ({
         <ScrollView
           style={styles.content}
           contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
         >
           {/* SVG визуализация с размерами */}
           <View style={styles.svgContainer}>
@@ -895,7 +902,7 @@ const WindowEditorModal: React.FC<WindowEditorModalProps> = ({
           currentWidthMM={displaySections.find((s) => s.id === editingSection)?.widthMM}
           currentHeightMM={displaySections.find((s) => s.id === editingSection)?.heightMM}
         />
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

@@ -11,6 +11,7 @@ import {
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 
 type SettingsScreenNavigationProp = StackNavigationProp<RootStackParamList, "Settings">;
 
@@ -28,6 +29,7 @@ interface SettingItemProps {
 
 const SettingsScreen: React.FC<Props> = ({ navigation }) => {
   const { isDarkMode, toggleTheme, theme } = useTheme();
+  const { signOut } = useAuth();
 
   const SettingItem: React.FC<SettingItemProps> = ({
     title,
@@ -85,6 +87,15 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        <View style={styles.settingsGroup}>
+          <SettingItem
+            title="Выйти из аккаунта"
+            subtitle="Сессия Supabase будет завершена"
+            showArrow
+            onPress={() => void signOut()}
+          />
+        </View>
+
         {/* Внешний вид */}
         <SectionHeader title="ВНЕШНИЙ ВИД" />
         <View style={styles.settingsGroup}>

@@ -34,12 +34,12 @@ interface WindowVisualizerProps {
   isCompact?: boolean; // Флаг для компактного режима (sticky)
 }
 
-const WindowVisualizer: React.FC<WindowVisualizerProps> = ({
+const WindowVisualizer = React.memo<WindowVisualizerProps>(function WindowVisualizer({
   config,
   width,
   height,
   isCompact = false,
-}) => {
+}) {
   // Адаптируем размеры для компактного режима
   const frameWidth = isCompact ? 10 : 23; // Толщина рамы
   const sashWidth = isCompact ? 6 : 9; // Толщина створки
@@ -3653,7 +3653,7 @@ const WindowVisualizer: React.FC<WindowVisualizerProps> = ({
       </Svg>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
