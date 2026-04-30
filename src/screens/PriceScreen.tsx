@@ -17,6 +17,10 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
 import {
+  DismissKeyboardScrollView,
+  KeyboardDismissBackdrop,
+} from "../components/DismissKeyboardScrollView";
+import {
   PriceService,
   Profile,
   GlassPackage,
@@ -861,13 +865,12 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
       )}
 
       {/* Контент */}
-      <ScrollView
+      <DismissKeyboardScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
       >
         {renderContent()}
-      </ScrollView>
+      </DismissKeyboardScrollView>
 
       {/* Модальное окно редактирования */}
       <Modal
@@ -880,6 +883,7 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
+          <KeyboardDismissBackdrop />
           <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
               Изменить цену

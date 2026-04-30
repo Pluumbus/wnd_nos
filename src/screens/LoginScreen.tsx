@@ -7,13 +7,20 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { supabase } from "../lib/supabase";
+import { useTheme } from "../context/ThemeContext";
+import { DismissKeyboardScrollView } from "../components/DismissKeyboardScrollView";
+import WindowLogo from "../components/WindowLogo";
 
 const devEmail = process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL ?? "";
 const devPassword = process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD ?? "";
 
 export const LoginScreen: React.FC = () => {
+  const { isDarkMode, theme } = useTheme();
   const [email, setEmail] = useState(__DEV__ ? devEmail : "");
   const [password, setPassword] = useState(__DEV__ ? devPassword : "");
   const [busy, setBusy] = useState(false);
@@ -35,81 +42,208 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
+  const placeholderColor = theme.colors.textSecondary;
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <Text style={styles.title}>Вход</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Пароль"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-      {message ? <Text style={styles.error}>{message}</Text> : null}
-      <TouchableOpacity
-        style={[styles.button, busy && styles.buttonDisabled]}
-        onPress={() => void onSubmit()}
-        disabled={busy}
+    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+      <StatusBar style={isDarkMode ? "light" : "dark"} />
+
+      <View
+        style={[styles.headerBackground, { backgroundColor: theme.colors.primary }]}
       >
-        {busy ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Войти</Text>
-        )}
-      </TouchableOpacity>
-    </KeyboardAvoidingView>
+        <View style={styles.headerDecoration} />
+      </View>
+
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <DismissKeyboardScrollView
+            contentContainerStyle={styles.scrollContent}
+            tapToDismissContainerStyle={styles.dismissArea}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.brandBlock}>
+              <View style={styles.logoWrapper}>
+                <WindowLogo
+                  size={130}
+                  primaryColor={theme.colors.primary}
+                  secondaryColor={theme.colors.secondary}
+                  variant={isDarkMode ? "dark" : "light"}
+                />
+              </View>
+              <Text style={[styles.appTitle, { color: theme.colors.text }]}>Н.О.С</Text>
+              <Text style={[styles.appSubtitle, { color: theme.colors.textSecondary }]}>
+                Калькулятор окон
+              </Text>
+              <Text style={[styles.screenTitle, { color: theme.colors.text }]}>
+                Вход в аккаунт
+              </Text>
+            </View>
+
+            <View style={styles.form}>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  },
+                ]}
+                placeholder="Email"
+                placeholderTextColor={placeholderColor}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoComplete="email"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  },
+                ]}
+                placeholder="Пароль"
+                placeholderTextColor={placeholderColor}
+                secureTextEntry
+                autoComplete="password"
+                value={password}
+                onChangeText={setPassword}
+              />
+              {message ? (
+                <Text style={[styles.error, { color: theme.colors.primary }]}>{message}</Text>
+              ) : null}
+
+              <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  { backgroundColor: theme.colors.primary },
+                  busy && styles.submitButtonDisabled,
+                ]}
+                onPress={() => void onSubmit()}
+                disabled={busy}
+                activeOpacity={0.85}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitLabel}>Войти</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </DismissKeyboardScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    justifyContent: "center",
-    padding: 24,
-    backgroundColor: "#f7f7f7",
   },
-  title: {
-    fontSize: 24,
+  safe: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
+  headerBackground: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 200,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+  },
+  headerDecoration: {
+    position: "absolute",
+    top: 40,
+    right: -50,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  dismissArea: {
+    paddingHorizontal: 20,
+  },
+  brandBlock: {
+    alignItems: "center",
+    marginTop: 48,
+    marginBottom: 32,
+  },
+  logoWrapper: {
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+    borderRadius: 20,
+  },
+  appTitle: {
+    fontSize: 32,
+    fontWeight: "bold",
+    marginTop: 20,
+    letterSpacing: 2,
+  },
+  appSubtitle: {
+    fontSize: 16,
+    marginTop: 4,
+  },
+  screenTitle: {
+    fontSize: 20,
     fontWeight: "700",
-    marginBottom: 24,
-    textAlign: "center",
+    marginTop: 20,
+  },
+  form: {
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
   },
   input: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    padding: 14,
+    borderRadius: 16,
+    paddingVertical: Platform.select({ ios: 16, default: 14 }),
+    paddingHorizontal: 18,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#ddd",
+    fontSize: 17,
   },
   error: {
-    color: "#c0392b",
     marginBottom: 12,
     textAlign: "center",
+    fontSize: 14,
   },
-  button: {
-    backgroundColor: "#2c3e50",
-    padding: 16,
-    borderRadius: 8,
+  submitButton: {
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: "center",
+    marginTop: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  buttonDisabled: {
-    opacity: 0.7,
+  submitButtonDisabled: {
+    opacity: 0.75,
   },
-  buttonText: {
+  submitLabel: {
     color: "#fff",
     fontWeight: "600",
-    fontSize: 16,
+    fontSize: 17,
   },
 });

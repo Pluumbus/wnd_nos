@@ -16,6 +16,7 @@ import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
 import { newOrderCustomerSchema } from "../validation/newOrderSchema";
 import type { OrderWithJoins } from "../services/orderService";
+import { KeyboardDismissBackdrop } from "../components/DismissKeyboardScrollView";
 
 type NewOrderScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -122,6 +123,7 @@ const NewOrderScreen: React.FC<Props> = ({ navigation }) => {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.centeredView}
         >
+          <KeyboardDismissBackdrop />
           <View
             style={[
               styles.modalView,

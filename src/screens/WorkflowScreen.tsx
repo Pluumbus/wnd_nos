@@ -17,6 +17,7 @@ import { StatusBar } from "expo-status-bar";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
+import { DismissKeyboardScrollView } from "../components/DismissKeyboardScrollView";
 import WindowVisualizer, { WindowConfig } from "../components/WindowVisualizer";
 import WindowConfigSelector from "../components/WindowConfigSelector";
 import ColorSelector from "../components/ColorSelector";
@@ -543,13 +544,12 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
         </Text>
       </View>
 
-      <ScrollView
+      <DismissKeyboardScrollView
         ref={scrollViewRef}
         style={styles.content}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={100}
-        keyboardShouldPersistTaps="handled"
       >
         {/* Информация о заказе */}
         <View
@@ -792,6 +792,8 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.sashTypeContainer}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
             >
               {Object.entries(openingSashesTypes).map(([key, value]) => (
                 <TouchableOpacity
@@ -850,6 +852,8 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.selectorContainer}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
               >
                 {profileSystems.map((system) => (
                   <TouchableOpacity
@@ -908,6 +912,8 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.selectorContainer}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
               >
                 {profiles
                   .filter(p => p.system_name === selectedProfileSystem)
@@ -972,6 +978,8 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.selectorContainer}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
               >
                 {furnitureSystems.map((system) => (
                   <TouchableOpacity
@@ -1034,6 +1042,8 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.selectorContainer}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
               >
                 {glassPackages.map((glass) => (
                   <TouchableOpacity
@@ -1423,7 +1433,7 @@ const WorkflowScreen: React.FC<Props> = ({ navigation, route }) => {
             </Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </DismissKeyboardScrollView>
 
       {/* Sticky WindowVisualizer */}
       {showStickyVisualizer && (

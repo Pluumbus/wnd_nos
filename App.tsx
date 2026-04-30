@@ -10,6 +10,7 @@ import { useNotifications } from "./src/hooks/useNotifications";
 import { SupabaseNotificationService } from "./src/services/supabaseNotificationService";
 import { AppErrorBoundary } from "./src/components/AppErrorBoundary";
 import { LoginScreen } from "./src/screens/LoginScreen";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 
@@ -70,7 +71,9 @@ const App: React.FC = () => {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <ThemeProvider>
-            <AppShell />
+            <SafeAreaProvider>
+              <AppShell />
+            </SafeAreaProvider>
           </ThemeProvider>
         </AuthProvider>
       </QueryClientProvider>

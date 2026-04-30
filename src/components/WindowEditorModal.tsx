@@ -6,13 +6,16 @@ import {
   TouchableOpacity,
   Text,
   Dimensions,
-  ScrollView,
   TextInput,
   TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import Svg, { Rect, Line, G, Text as SvgText, Circle } from "react-native-svg";
+import {
+  DismissKeyboardScrollView,
+  KeyboardDismissBackdrop,
+} from "./DismissKeyboardScrollView";
 import { useTheme } from "../context/ThemeContext";
 import { WindowConfig, WindowSection } from "./WindowVisualizer";
 import { openingSashesTypes } from "../utils/opening_sashes.dict";
@@ -106,6 +109,7 @@ const SashTypeModal: React.FC<SashTypeModalProps> = ({
         style={styles.modalOverlay}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
+        <KeyboardDismissBackdrop />
         <View
           style={[
             styles.modalContent,
@@ -584,10 +588,9 @@ const WindowEditorModal: React.FC<WindowEditorModalProps> = ({
           <View style={styles.headerPlaceholder} />
         </View>
 
-        <ScrollView
+        <DismissKeyboardScrollView
           style={styles.content}
           contentContainerStyle={styles.contentContainer}
-          keyboardShouldPersistTaps="handled"
         >
           {/* SVG визуализация с размерами */}
           <View style={styles.svgContainer}>
@@ -887,7 +890,7 @@ const WindowEditorModal: React.FC<WindowEditorModalProps> = ({
               </TouchableOpacity>
             ))}
           </View>
-        </ScrollView>
+        </DismissKeyboardScrollView>
 
         <SashTypeModal
           visible={sashTypeModalVisible}

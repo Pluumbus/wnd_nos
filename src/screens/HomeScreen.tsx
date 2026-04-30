@@ -4,12 +4,15 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Platform,
+  Pressable,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 import WindowLogo from "../components/WindowLogo";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
@@ -18,8 +21,12 @@ interface Props {
   navigation: HomeScreenNavigationProp;
 }
 
+const IOS_LOGOUT = "#FF3B30";
+const ANDROID_LOGOUT = "#B3261E";
+
 const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const { isDarkMode, theme } = useTheme();
+  const { signOut } = useAuth();
 
   const menuItems = [
     { id: 1, title: "Новый заказ", icon: "add-circle-outline" as const, route: "NewOrder" as const },
@@ -46,6 +53,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
               size={130}
               primaryColor={theme.colors.primary}
               secondaryColor={theme.colors.secondary}
+              variant={isDarkMode ? "dark" : "light"}
             />
           </View>
           <Text style={[styles.appTitle, { color: theme.colors.text }]}>
@@ -83,6 +91,35 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Выход: iOS — типичный красный текст; Android — текстовая кнопка Material error */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.logoutPressable,
+            Platform.OS === "android" && {
+              backgroundColor: pressed ? `${ANDROID_LOGOUT}14` : "transparent",
+            },
+          ]}
+          onPress={() => void signOut()}
+          android_ripple={{ color: `${ANDROID_LOGOUT}33`, borderless: false }}
+        >
+          <Text
+            style={[
+              styles.logoutLabel,
+              Platform.OS === "ios"
+                ? { color: IOS_LOGOUT, fontSize: 17, fontWeight: "400" }
+                : {
+                    color: ANDROID_LOGOUT,
+                    fontSize: 14,
+                    fontWeight: "500",
+                    letterSpacing: 0.25,
+                    textTransform: "uppercase",
+                  },
+            ]}
+          >
+            Выйти
+          </Text>
+        </Pressable>
 
         {/* Версия */}
         <Text style={[styles.versionText, { color: theme.colors.textSecondary }]}>
@@ -184,8 +221,20 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "300",
   },
+  logoutPressable: {
+    marginTop: 20,
+    paddingVertical: Platform.OS === "ios" ? 10 : 12,
+    paddingHorizontal: 24,
+    minHeight: Platform.OS === "android" ? 48 : undefined,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: Platform.OS === "android" ? 24 : 0,
+  },
+  logoutLabel: {
+    textAlign: "center",
+  },
   versionText: {
-    marginTop: 32,
+    marginTop: 16,
     fontSize: 12,
   },
 });
