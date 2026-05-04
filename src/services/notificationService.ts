@@ -1,6 +1,6 @@
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
-import Constants from "expo-constants";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import { Platform } from "react-native";
 
 Notifications.setNotificationHandler({
@@ -21,6 +21,14 @@ export interface NotificationData {
 
 export class NotificationService {
   static async registerForPushNotificationsAsync(): Promise<string | null> {
+    /** Expo Go на Android (SDK 53+): удалён remote push — нужен development build. */
+    if (
+      Platform.OS === "android" &&
+      Constants.executionEnvironment === ExecutionEnvironment.StoreClient
+    ) {
+      return null;
+    }
+
     let token: string | null = null;
 
     if (Platform.OS === "android") {

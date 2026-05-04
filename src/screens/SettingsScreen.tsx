@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Switch,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
@@ -71,7 +71,7 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Заголовок с расширенным фоном */}
       <View style={[styles.headerWrapper, { backgroundColor: theme.colors.surface }]}>
-        <SafeAreaView>
+        <SafeAreaView edges={["top"]}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
               <Text style={[styles.backButtonText, { color: theme.colors.primary }]}>

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "wnd_nos",
+    "name": "Н.О.С.",
     "slug": "wndnos",
     "version": "1.0.0",
     "orientation": "default",
@@ -52,7 +52,6 @@
           "defaultChannel": "default"
         }
       ],
-      "@sentry/react-native",
       "expo-font"
     ],
     "extra": {

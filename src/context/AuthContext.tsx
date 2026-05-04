@@ -23,16 +23,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session ?? null);
-      setLoading(false);
-    });
+    let cancelled = false;
+    /** Разблокировать UI если getSession зависнет (нет сети / неверный URL в проде). */
+    const timeoutMs = 12_000;
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        setLoading(false);
+      }
+    }, timeoutMs);
+
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!cancelled) setSession(data.session ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setSession(null);
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+        if (!cancelled) setLoading(false);
+      });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
     });
 
     return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
       sub.subscription.unsubscribe();
     };
   }, []);

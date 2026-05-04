@@ -510,6 +510,21 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_roles: {
+        Row: {
+          user_id: string;
+          role: string;
+        };
+        Insert: {
+          user_id: string;
+          role: string;
+        };
+        Update: {
+          user_id?: string;
+          role?: string;
+        };
+        Relationships: [];
+      };
       wnd_constructions: {
         Row: {
           color: string;
@@ -619,6 +634,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      register_push_token: {
+        Args: { p_push_token: string };
+        Returns: undefined;
+      };
       create_order_with_config: {
         Args: { p: Json };
         Returns: number;

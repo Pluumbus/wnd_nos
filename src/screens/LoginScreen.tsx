@@ -3,6 +3,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,20 +12,28 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { useNavigation } from "@react-navigation/native";
+import type { StackNavigationProp } from "@react-navigation/stack";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../context/ThemeContext";
+import type { AuthStackParamList } from "../navigation/AuthNavigator";
 import { DismissKeyboardScrollView } from "../components/DismissKeyboardScrollView";
 import WindowLogo from "../components/WindowLogo";
 
 const devEmail = process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL ?? "";
 const devPassword = process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD ?? "";
 
+type LoginNav = StackNavigationProp<AuthStackParamList, "Login">;
+
 export const LoginScreen: React.FC = () => {
+  const navigation = useNavigation<LoginNav>();
   const { isDarkMode, theme } = useTheme();
   const [email, setEmail] = useState(__DEV__ ? devEmail : "");
   const [password, setPassword] = useState(__DEV__ ? devPassword : "");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const onSubmit = async () => {
     setMessage(null);
@@ -73,7 +82,7 @@ export const LoginScreen: React.FC = () => {
                   variant={isDarkMode ? "dark" : "light"}
                 />
               </View>
-              <Text style={[styles.appTitle, { color: theme.colors.text }]}>Н.О.С</Text>
+              <Text style={[styles.appTitle, { color: theme.colors.text }]}>Н.О.С.</Text>
               <Text style={[styles.appSubtitle, { color: theme.colors.textSecondary }]}>
                 Калькулятор окон
               </Text>
@@ -100,22 +109,38 @@ export const LoginScreen: React.FC = () => {
                 value={email}
                 onChangeText={setEmail}
               />
-              <TextInput
+              <View
                 style={[
-                  styles.input,
+                  styles.passwordRow,
                   {
                     backgroundColor: theme.colors.surface,
                     borderColor: theme.colors.border,
-                    color: theme.colors.text,
                   },
                 ]}
-                placeholder="Пароль"
-                placeholderTextColor={placeholderColor}
-                secureTextEntry
-                autoComplete="password"
-                value={password}
-                onChangeText={setPassword}
-              />
+              >
+                <TextInput
+                  style={[styles.passwordInput, { color: theme.colors.text }]}
+                  placeholder="Пароль"
+                  placeholderTextColor={placeholderColor}
+                  secureTextEntry={!showPassword}
+                  autoComplete="password"
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <Pressable
+                  onPress={() => setShowPassword((v) => !v)}
+                  style={({ pressed }) => [styles.passwordEyeHit, pressed && styles.passwordEyePressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={22}
+                    color={theme.colors.textSecondary}
+                  />
+                </Pressable>
+              </View>
               {message ? (
                 <Text style={[styles.error, { color: theme.colors.primary }]}>{message}</Text>
               ) : null}
@@ -135,6 +160,19 @@ export const LoginScreen: React.FC = () => {
                 ) : (
                   <Text style={styles.submitLabel}>Войти</Text>
                 )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.registerLinkWrap}
+                onPress={() => navigation.navigate("Register")}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.registerHint, { color: theme.colors.textSecondary }]}>
+                  Нет аккаунта?
+                </Text>
+                <Text style={[styles.registerCta, { color: theme.colors.primary }]}>
+                  Зарегистрироваться
+                </Text>
               </TouchableOpacity>
             </View>
           </DismissKeyboardScrollView>
@@ -222,6 +260,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     fontSize: 17,
   },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    paddingRight: 6,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: Platform.select({ ios: 16, default: 14 }),
+    paddingHorizontal: 18,
+    fontSize: 17,
+  },
+  passwordEyeHit: {
+    padding: 10,
+  },
+  passwordEyePressed: {
+    opacity: 0.65,
+  },
   error: {
     marginBottom: 12,
     textAlign: "center",
@@ -245,5 +303,18 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
     fontSize: 17,
+  },
+  registerLinkWrap: {
+    marginTop: 28,
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  registerHint: {
+    fontSize: 14,
+  },
+  registerCta: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginTop: 4,
   },
 });

@@ -1,37 +1,20 @@
 import { supabase } from "../lib/supabase";
 
 export class SupabaseNotificationService {
-  static async savePushToken(userId: string, pushToken: string): Promise<void> {
-    const { data: existingToken, error: selectError } = await supabase
-      .from("user_push_tokens")
-      .select("push_token")
-      .eq("user_id", userId)
-      .eq("push_token", pushToken)
-      .single();
-
-    if (selectError && selectError.code !== "PGRST116") {
-      console.error("Error checking existing push token:", selectError);
-      throw selectError;
-    }
-
-    if (existingToken) {
-      const { error: updateError } = await supabase
-        .from("user_push_tokens")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("user_id", userId)
-        .eq("push_token", pushToken);
-
-      if (updateError) {
-        console.error("Error updating push token timestamp:", updateError);
-        throw updateError;
-      }
+  /**
+   * Сохраняет push-токен за текущим пользователем (JWT → auth.uid() на сервере).
+   * Используется RPC с ON CONFLICT(push_token): один токен = одно устройство,
+   * при смене аккаунта строка перепривязывается без 23505; через insert/upsert
+   * с клиента это ломалось из‑за UNIQUE на push_token и RLS.
+   */
+  static async savePushToken(_userId: string, pushToken: string): Promise<void> {
+    const trimmed = pushToken.trim();
+    if (!trimmed) {
       return;
     }
 
-    const { error } = await supabase.from("user_push_tokens").upsert({
-      user_id: userId,
-      push_token: pushToken,
-      updated_at: new Date().toISOString(),
+    const { error } = await supabase.rpc("register_push_token", {
+      p_push_token: trimmed,
     });
 
     if (error) {

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
   Modal,
@@ -13,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { useTheme } from "../context/ThemeContext";
@@ -35,20 +35,20 @@ import {
   ReinforcementPrice,
   Extra,
 } from "../services/priceService";
+import { useAuth } from "../context/AuthContext";
+import { fetchUserIsAdmin } from "../lib/userRoles";
 
-type PriceScreenNavigationProp = StackNavigationProp<RootStackParamList, "Price">;
+type PriceScreenNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  "Price"
+>;
 
 interface Props {
   navigation: PriceScreenNavigationProp;
 }
 
 // Типы категорий
-type CategoryKey =
-  | "profiles"
-  | "glass"
-  | "furniture"
-  | "handles"
-  | "extras";
+type CategoryKey = "profiles" | "glass" | "furniture" | "handles" | "extras";
 
 interface Category {
   key: CategoryKey;
@@ -74,10 +74,12 @@ interface EditableItem {
 
 const PriceScreen: React.FC<Props> = ({ navigation }) => {
   const { theme } = useTheme();
+  const { session } = useAuth();
   const [activeCategory, setActiveCategory] = useState<CategoryKey>("profiles");
   const [isLoading, setIsLoading] = useState(true);
+  const [priceEditAllowed, setPriceEditAllowed] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  
+
   // Модальное окно редактирования
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<EditableItem | null>(null);
@@ -88,14 +90,22 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [glassPackages, setGlassPackages] = useState<GlassPackage[]>([]);
   const [glassTypes, setGlassTypes] = useState<GlassType[]>([]);
-  const [furnitureSystems, setFurnitureSystems] = useState<FurnitureSystem[]>([]);
+  const [furnitureSystems, setFurnitureSystems] = useState<FurnitureSystem[]>(
+    [],
+  );
   const [furnitureItems, setFurnitureItems] = useState<FurnitureItem[]>([]);
   const [handles, setHandles] = useState<Handle[]>([]);
   const [windowsills, setWindowsills] = useState<Windowsill[]>([]);
-  const [windowsillAccessories, setWindowsillAccessories] = useState<WindowsillAccessory[]>([]);
+  const [windowsillAccessories, setWindowsillAccessories] = useState<
+    WindowsillAccessory[]
+  >([]);
   const [muntins, setMuntins] = useState<Muntin[]>([]);
-  const [mosquitoNetPrices, setMosquitoNetPrices] = useState<MosquitoNetPrice[]>([]);
-  const [reinforcementPrices, setReinforcementPrices] = useState<ReinforcementPrice[]>([]);
+  const [mosquitoNetPrices, setMosquitoNetPrices] = useState<
+    MosquitoNetPrice[]
+  >([]);
+  const [reinforcementPrices, setReinforcementPrices] = useState<
+    ReinforcementPrice[]
+  >([]);
   const [extras, setExtras] = useState<Extra[]>([]);
 
   // Загрузка данных
@@ -103,7 +113,7 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
     try {
       setIsLoading(true);
       const data = await PriceService.loadAllPriceData(forceRefresh);
-      
+
       setProfiles(data.profiles);
       setGlassPackages(data.glassPackages);
       setGlassTypes(data.glassTypes);
@@ -118,7 +128,10 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
       setExtras(data.extras);
     } catch (error) {
       console.error("Error loading price data:", error);
-      Alert.alert("Ошибка", "Не удалось загрузить данные. Проверьте подключение к интернету.");
+      Alert.alert(
+        "Ошибка",
+        "Не удалось загрузить данные. Проверьте подключение к интернету.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -128,6 +141,34 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const uid = session?.user?.id;
+      if (!uid) {
+        if (!cancelled) {
+          setPriceEditAllowed(false);
+        }
+        return;
+      }
+      const admin = await fetchUserIsAdmin(uid);
+      if (!cancelled) {
+        setPriceEditAllowed(admin);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!priceEditAllowed) {
+      setIsEditMode(false);
+    }
+  }, [priceEditAllowed]);
+
+  const effectiveEditMode = isEditMode && priceEditAllowed;
+
   // Форматирование цены
   const formatPrice = (price: number): string => {
     return price.toLocaleString("ru-RU") + " ₸";
@@ -135,6 +176,7 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
 
   // Открытие модального окна редактирования
   const openEditModal = (item: EditableItem) => {
+    if (!priceEditAllowed) return;
     setEditingItem(item);
     setEditValue(item.currentValue.toString());
     setEditModalVisible(true);
@@ -142,8 +184,8 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
 
   // Сохранение изменений
   const saveEdit = async () => {
-    if (!editingItem) return;
-    
+    if (!editingItem || !priceEditAllowed) return;
+
     const newValue = parseFloat(editValue);
     if (isNaN(newValue) || newValue < 0) {
       Alert.alert("Ошибка", "Введите корректное значение цены");
@@ -153,7 +195,7 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
     setIsSaving(true);
     try {
       const updates = { [editingItem.field]: newValue };
-      
+
       switch (editingItem.table) {
         case "profiles":
           await PriceService.updateProfile(editingItem.id, updates);
@@ -209,27 +251,34 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
     id: number,
     field: string,
     itemName: string,
-    flex: number = 1
+    flex: number = 1,
   ) => {
     const content = (
       <Text
         style={[
           styles.tableCell,
           { flex, color: theme.colors.text },
-          isEditMode && styles.editableCell,
+          effectiveEditMode && styles.editableCell,
         ]}
       >
         {formatPrice(value)}
       </Text>
     );
 
-    if (isEditMode) {
+    if (effectiveEditMode) {
       return (
         <TouchableOpacity
           style={{ flex }}
-          onPress={() => openEditModal({ id, table, field, currentValue: value, itemName })}
+          onPress={() =>
+            openEditModal({ id, table, field, currentValue: value, itemName })
+          }
         >
-          <View style={[styles.editableCellContainer, { borderColor: theme.colors.primary }]}>
+          <View
+            style={[
+              styles.editableCellContainer,
+              { borderColor: theme.colors.primary },
+            ]}
+          >
             {content}
           </View>
         </TouchableOpacity>
@@ -241,7 +290,13 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
 
   // Рендер заголовка таблицы
   const renderTableHeader = (columns: { title: string; flex: number }[]) => (
-    <View style={[styles.tableRow, styles.tableHeader, { backgroundColor: theme.colors.primary }]}>
+    <View
+      style={[
+        styles.tableRow,
+        styles.tableHeader,
+        { backgroundColor: theme.colors.primary },
+      ]}
+    >
       {columns.map((col, index) => (
         <Text
           key={index}
@@ -267,13 +322,20 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
 
     return (
       <View>
-        <Text style={[styles.sectionDescription, { color: theme.colors.textSecondary }]}>
+        <Text
+          style={[
+            styles.sectionDescription,
+            { color: theme.colors.textSecondary },
+          ]}
+        >
           Цены за кв.м. / погонный метр
         </Text>
 
         {Object.entries(groupedProfiles).map(([system, systemProfiles]) => (
           <View key={system} style={styles.subsection}>
-            <Text style={[styles.subsectionTitle, { color: theme.colors.text }]}>
+            <Text
+              style={[styles.subsectionTitle, { color: theme.colors.text }]}
+            >
               {system}
             </Text>
 
@@ -290,17 +352,43 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
                 style={[
                   styles.tableRow,
                   {
-                    backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                    backgroundColor:
+                      index % 2 === 0
+                        ? theme.colors.surface
+                        : theme.colors.background,
                     borderBottomColor: theme.colors.border,
                   },
                 ]}
               >
-                <Text style={[styles.tableCell, { flex: 2, color: theme.colors.text }]}>
+                <Text
+                  style={[
+                    styles.tableCell,
+                    { flex: 2, color: theme.colors.text },
+                  ]}
+                >
                   {profile.name}
                 </Text>
-                {renderEditableCell(profile.frame_price, "profiles", profile.id, "frame_price", profile.name || "")}
-                {renderEditableCell(profile.sash_price, "profiles", profile.id, "sash_price", profile.name || "")}
-                {renderEditableCell(profile.impost_price, "profiles", profile.id, "impost_price", profile.name || "")}
+                {renderEditableCell(
+                  profile.frame_price,
+                  "profiles",
+                  profile.id,
+                  "frame_price",
+                  profile.name || "",
+                )}
+                {renderEditableCell(
+                  profile.sash_price,
+                  "profiles",
+                  profile.id,
+                  "sash_price",
+                  profile.name || "",
+                )}
+                {renderEditableCell(
+                  profile.impost_price,
+                  "profiles",
+                  profile.id,
+                  "impost_price",
+                  profile.name || "",
+                )}
               </View>
             ))}
           </View>
@@ -311,19 +399,30 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
 
   // Рендер секции стеклопакетов
   const renderGlass = () => {
-    const singleChamber = glassPackages.filter((g) => g.chamber_type === "single");
-    const doubleChamber = glassPackages.filter((g) => g.chamber_type === "double");
+    const singleChamber = glassPackages.filter(
+      (g) => g.chamber_type === "single",
+    );
+    const doubleChamber = glassPackages.filter(
+      (g) => g.chamber_type === "double",
+    );
 
     return (
       <View>
-        <Text style={[styles.sectionDescription, { color: theme.colors.textSecondary }]}>
+        <Text
+          style={[
+            styles.sectionDescription,
+            { color: theme.colors.textSecondary },
+          ]}
+        >
           Цены за кв.м.
         </Text>
 
         {/* Однокамерные */}
         {singleChamber.length > 0 && (
           <View style={styles.subsection}>
-            <Text style={[styles.subsectionTitle, { color: theme.colors.text }]}>
+            <Text
+              style={[styles.subsectionTitle, { color: theme.colors.text }]}
+            >
               Однокамерные (СПО)
             </Text>
 
@@ -339,18 +438,37 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
                 style={[
                   styles.tableRow,
                   {
-                    backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                    backgroundColor:
+                      index % 2 === 0
+                        ? theme.colors.surface
+                        : theme.colors.background,
                     borderBottomColor: theme.colors.border,
                   },
                 ]}
               >
-                <Text style={[styles.tableCell, { flex: 2, color: theme.colors.text }]}>
+                <Text
+                  style={[
+                    styles.tableCell,
+                    { flex: 2, color: theme.colors.text },
+                  ]}
+                >
                   {glass.name}
                 </Text>
-                <Text style={[styles.tableCell, { flex: 1, color: theme.colors.text }]}>
+                <Text
+                  style={[
+                    styles.tableCell,
+                    { flex: 1, color: theme.colors.text },
+                  ]}
+                >
                   {glass.thickness} мм
                 </Text>
-                {renderEditableCell(glass.price, "glass_packages", glass.id, "price", glass.name)}
+                {renderEditableCell(
+                  glass.price,
+                  "glass_packages",
+                  glass.id,
+                  "price",
+                  glass.name,
+                )}
               </View>
             ))}
           </View>
@@ -374,18 +492,37 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
               style={[
                 styles.tableRow,
                 {
-                  backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                  backgroundColor:
+                    index % 2 === 0
+                      ? theme.colors.surface
+                      : theme.colors.background,
                   borderBottomColor: theme.colors.border,
                 },
               ]}
             >
-              <Text style={[styles.tableCell, { flex: 2, color: theme.colors.text }]}>
+              <Text
+                style={[
+                  styles.tableCell,
+                  { flex: 2, color: theme.colors.text },
+                ]}
+              >
                 {glass.name}
               </Text>
-              <Text style={[styles.tableCell, { flex: 1, color: theme.colors.text }]}>
+              <Text
+                style={[
+                  styles.tableCell,
+                  { flex: 1, color: theme.colors.text },
+                ]}
+              >
                 {glass.thickness} мм
               </Text>
-              {renderEditableCell(glass.price, "glass_packages", glass.id, "price", glass.name)}
+              {renderEditableCell(
+                glass.price,
+                "glass_packages",
+                glass.id,
+                "price",
+                glass.name,
+              )}
             </View>
           ))}
         </View>
@@ -393,7 +530,9 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
         {/* Отдельное стекло */}
         {glassTypes.length > 0 && (
           <View style={styles.subsection}>
-            <Text style={[styles.subsectionTitle, { color: theme.colors.text }]}>
+            <Text
+              style={[styles.subsectionTitle, { color: theme.colors.text }]}
+            >
               Стекло отдельно
             </Text>
 
@@ -408,15 +547,29 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
                 style={[
                   styles.tableRow,
                   {
-                    backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                    backgroundColor:
+                      index % 2 === 0
+                        ? theme.colors.surface
+                        : theme.colors.background,
                     borderBottomColor: theme.colors.border,
                   },
                 ]}
               >
-                <Text style={[styles.tableCell, { flex: 2, color: theme.colors.text }]}>
+                <Text
+                  style={[
+                    styles.tableCell,
+                    { flex: 2, color: theme.colors.text },
+                  ]}
+                >
                   {glass.name}
                 </Text>
-                {renderEditableCell(glass.price, "glass_types", glass.id, "price", glass.name)}
+                {renderEditableCell(
+                  glass.price,
+                  "glass_types",
+                  glass.id,
+                  "price",
+                  glass.name,
+                )}
               </View>
             ))}
           </View>
@@ -428,12 +581,14 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
   // Рендер фурнитуры
   const renderFurniture = () => {
     // Группируем по системам
-    const itemsBySystem: { [key: number]: { system: FurnitureSystem; items: FurnitureItem[] } } = {};
-    
+    const itemsBySystem: {
+      [key: number]: { system: FurnitureSystem; items: FurnitureItem[] };
+    } = {};
+
     furnitureSystems.forEach((system) => {
       itemsBySystem[system.id] = { system, items: [] };
     });
-    
+
     furnitureItems.forEach((item) => {
       if (item.system_id && itemsBySystem[item.system_id]) {
         itemsBySystem[item.system_id].items.push(item);
@@ -472,24 +627,33 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
 
     return (
       <View>
-        <Text style={[styles.sectionDescription, { color: theme.colors.textSecondary }]}>
+        <Text
+          style={[
+            styles.sectionDescription,
+            { color: theme.colors.textSecondary },
+          ]}
+        >
           Цены в тенге
         </Text>
 
         {Object.values(itemsBySystem).map(({ system, items }) => {
           if (items.length === 0) return null;
-          
+
           const groupedItems = groupByCategory(items);
 
           return (
             <View key={system.id} style={styles.subsection}>
-              <Text style={[styles.systemTitle, { color: theme.colors.primary }]}>
+              <Text
+                style={[styles.systemTitle, { color: theme.colors.primary }]}
+              >
                 {system.name}
               </Text>
 
               {Object.entries(groupedItems).map(([category, categoryItems]) => (
                 <View key={category} style={styles.categorySection}>
-                  <Text style={[styles.categoryTitle, { color: theme.colors.text }]}>
+                  <Text
+                    style={[styles.categoryTitle, { color: theme.colors.text }]}
+                  >
                     {categoryNames[category] || category}
                   </Text>
 
@@ -505,18 +669,39 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
                       style={[
                         styles.tableRow,
                         {
-                          backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                          backgroundColor:
+                            index % 2 === 0
+                              ? theme.colors.surface
+                              : theme.colors.background,
                           borderBottomColor: theme.colors.border,
                         },
                       ]}
                     >
-                      <Text style={[styles.tableCell, { flex: 2, color: theme.colors.text }]}>
+                      <Text
+                        style={[
+                          styles.tableCell,
+                          { flex: 2, color: theme.colors.text },
+                        ]}
+                      >
                         {item.name}
                       </Text>
-                      <Text style={[styles.tableCell, { flex: 1, color: theme.colors.text }]}>
-                        {item.min_size && item.max_size ? `${item.min_size}-${item.max_size}` : "—"}
+                      <Text
+                        style={[
+                          styles.tableCell,
+                          { flex: 1, color: theme.colors.text },
+                        ]}
+                      >
+                        {item.min_size && item.max_size
+                          ? `${item.min_size}-${item.max_size}`
+                          : "—"}
                       </Text>
-                      {renderEditableCell(item.price, "furniture_items", item.id, "price", item.name)}
+                      {renderEditableCell(
+                        item.price,
+                        "furniture_items",
+                        item.id,
+                        "price",
+                        item.name,
+                      )}
                     </View>
                   ))}
                 </View>
@@ -532,7 +717,12 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
   const renderHandles = () => {
     return (
       <View>
-        <Text style={[styles.sectionDescription, { color: theme.colors.textSecondary }]}>
+        <Text
+          style={[
+            styles.sectionDescription,
+            { color: theme.colors.textSecondary },
+          ]}
+        >
           Цены в тенге (белый / коричневый)
         </Text>
 
@@ -548,16 +738,33 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
             style={[
               styles.tableRow,
               {
-                backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                backgroundColor:
+                  index % 2 === 0
+                    ? theme.colors.surface
+                    : theme.colors.background,
                 borderBottomColor: theme.colors.border,
               },
             ]}
           >
-            <Text style={[styles.tableCell, { flex: 2, color: theme.colors.text }]}>
+            <Text
+              style={[styles.tableCell, { flex: 2, color: theme.colors.text }]}
+            >
               {item.name}
             </Text>
-            {renderEditableCell(item.price, "handles", item.id, "price", item.name)}
-            {renderEditableCell(item.price_alt || item.price, "handles", item.id, "price_alt", item.name)}
+            {renderEditableCell(
+              item.price,
+              "handles",
+              item.id,
+              "price",
+              item.name,
+            )}
+            {renderEditableCell(
+              item.price_alt || item.price,
+              "handles",
+              item.id,
+              "price_alt",
+              item.name,
+            )}
           </View>
         ))}
       </View>
@@ -585,15 +792,29 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
               style={[
                 styles.tableRow,
                 {
-                  backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                  backgroundColor:
+                    index % 2 === 0
+                      ? theme.colors.surface
+                      : theme.colors.background,
                   borderBottomColor: theme.colors.border,
                 },
               ]}
             >
-              <Text style={[styles.tableCell, { flex: 2, color: theme.colors.text }]}>
+              <Text
+                style={[
+                  styles.tableCell,
+                  { flex: 2, color: theme.colors.text },
+                ]}
+              >
                 {item.name} ({item.unit === "per_sqm" ? "за кв.м." : "за п.м."})
               </Text>
-              {renderEditableCell(item.price, "mosquito_net_prices", item.id, "price", item.name)}
+              {renderEditableCell(
+                item.price,
+                "mosquito_net_prices",
+                item.id,
+                "price",
+                item.name,
+              )}
             </View>
           ))}
         </View>
@@ -615,15 +836,29 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
               style={[
                 styles.tableRow,
                 {
-                  backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                  backgroundColor:
+                    index % 2 === 0
+                      ? theme.colors.surface
+                      : theme.colors.background,
                   borderBottomColor: theme.colors.border,
                 },
               ]}
             >
-              <Text style={[styles.tableCell, { flex: 1, color: theme.colors.text }]}>
+              <Text
+                style={[
+                  styles.tableCell,
+                  { flex: 1, color: theme.colors.text },
+                ]}
+              >
                 {item.width} мм
               </Text>
-              {renderEditableCell(item.price, "windowsills", item.id, "price", `${item.width} мм`)}
+              {renderEditableCell(
+                item.price,
+                "windowsills",
+                item.id,
+                "price",
+                `${item.width} мм`,
+              )}
             </View>
           ))}
 
@@ -633,15 +868,29 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
               style={[
                 styles.tableRow,
                 {
-                  backgroundColor: (windowsills.length + index) % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                  backgroundColor:
+                    (windowsills.length + index) % 2 === 0
+                      ? theme.colors.surface
+                      : theme.colors.background,
                   borderBottomColor: theme.colors.border,
                 },
               ]}
             >
-              <Text style={[styles.tableCell, { flex: 1, color: theme.colors.text }]}>
+              <Text
+                style={[
+                  styles.tableCell,
+                  { flex: 1, color: theme.colors.text },
+                ]}
+              >
                 {item.name}
               </Text>
-              {renderEditableCell(item.price, "windowsill_accessories", item.id, "price", item.name)}
+              {renderEditableCell(
+                item.price,
+                "windowsill_accessories",
+                item.id,
+                "price",
+                item.name,
+              )}
             </View>
           ))}
         </View>
@@ -666,18 +915,50 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
               style={[
                 styles.tableRow,
                 {
-                  backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                  backgroundColor:
+                    index % 2 === 0
+                      ? theme.colors.surface
+                      : theme.colors.background,
                   borderBottomColor: theme.colors.border,
                 },
               ]}
             >
-              <Text style={[styles.tableCell, { flex: 1, color: theme.colors.text }]}>
+              <Text
+                style={[
+                  styles.tableCell,
+                  { flex: 1, color: theme.colors.text },
+                ]}
+              >
                 {item.width} мм
               </Text>
-              {renderEditableCell(item.price_white, "muntins", item.id, "price_white", `${item.width} мм белый`)}
-              {renderEditableCell(item.price_gold, "muntins", item.id, "price_gold", `${item.width} мм золото`)}
-              {renderEditableCell(item.price_brown, "muntins", item.id, "price_brown", `${item.width} мм коричневый`)}
-              {renderEditableCell(item.price_colored, "muntins", item.id, "price_colored", `${item.width} мм цветной`)}
+              {renderEditableCell(
+                item.price_white,
+                "muntins",
+                item.id,
+                "price_white",
+                `${item.width} мм белый`,
+              )}
+              {renderEditableCell(
+                item.price_gold,
+                "muntins",
+                item.id,
+                "price_gold",
+                `${item.width} мм золото`,
+              )}
+              {renderEditableCell(
+                item.price_brown,
+                "muntins",
+                item.id,
+                "price_brown",
+                `${item.width} мм коричневый`,
+              )}
+              {renderEditableCell(
+                item.price_colored,
+                "muntins",
+                item.id,
+                "price_colored",
+                `${item.width} мм цветной`,
+              )}
             </View>
           ))}
         </View>
@@ -699,15 +980,29 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
               style={[
                 styles.tableRow,
                 {
-                  backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                  backgroundColor:
+                    index % 2 === 0
+                      ? theme.colors.surface
+                      : theme.colors.background,
                   borderBottomColor: theme.colors.border,
                 },
               ]}
             >
-              <Text style={[styles.tableCell, { flex: 2, color: theme.colors.text }]}>
+              <Text
+                style={[
+                  styles.tableCell,
+                  { flex: 2, color: theme.colors.text },
+                ]}
+              >
                 {item.profile_type} профиль {item.thickness} мм
               </Text>
-              {renderEditableCell(item.price, "reinforcement_prices", item.id, "price", `${item.profile_type} ${item.thickness}`)}
+              {renderEditableCell(
+                item.price,
+                "reinforcement_prices",
+                item.id,
+                "price",
+                `${item.profile_type} ${item.thickness}`,
+              )}
             </View>
           ))}
         </View>
@@ -729,15 +1024,29 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
               style={[
                 styles.tableRow,
                 {
-                  backgroundColor: index % 2 === 0 ? theme.colors.surface : theme.colors.background,
+                  backgroundColor:
+                    index % 2 === 0
+                      ? theme.colors.surface
+                      : theme.colors.background,
                   borderBottomColor: theme.colors.border,
                 },
               ]}
             >
-              <Text style={[styles.tableCell, { flex: 2, color: theme.colors.text }]}>
+              <Text
+                style={[
+                  styles.tableCell,
+                  { flex: 2, color: theme.colors.text },
+                ]}
+              >
                 {item.name}
               </Text>
-              {renderEditableCell(item.price, "extras", item.id, "price", item.name)}
+              {renderEditableCell(
+                item.price,
+                "extras",
+                item.id,
+                "price",
+                item.name,
+              )}
             </View>
           ))}
         </View>
@@ -765,12 +1074,27 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <View style={[styles.headerWrapper, { backgroundColor: theme.colors.surface }]}>
-          <SafeAreaView>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <View
+          style={[
+            styles.headerWrapper,
+            { backgroundColor: theme.colors.surface },
+          ]}
+        >
+          <SafeAreaView edges={["top"]}>
             <View style={styles.header}>
-              <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-                <Text style={[styles.backButtonText, { color: theme.colors.primary }]}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Text
+                  style={[
+                    styles.backButtonText,
+                    { color: theme.colors.primary },
+                  ]}
+                >
                   Назад
                 </Text>
               </TouchableOpacity>
@@ -792,35 +1116,51 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       {/* Заголовок с расширенным фоном */}
-      <View style={[styles.headerWrapper, { backgroundColor: theme.colors.surface }]}>
-        <SafeAreaView>
+      <View
+        style={[
+          styles.headerWrapper,
+          { backgroundColor: theme.colors.surface },
+        ]}
+      >
+        <SafeAreaView edges={["top"]}>
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-              <Text style={[styles.backButtonText, { color: theme.colors.primary }]}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Text
+                style={[styles.backButtonText, { color: theme.colors.primary }]}
+              >
                 Назад
               </Text>
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
               Прайс-лист
             </Text>
-            <TouchableOpacity
-              style={[
-                styles.editButton,
-                isEditMode && { backgroundColor: theme.colors.primary },
-              ]}
-              onPress={() => setIsEditMode(!isEditMode)}
-            >
-              <Text
+            {priceEditAllowed ? (
+              <TouchableOpacity
                 style={[
-                  styles.editButtonText,
-                  { color: isEditMode ? "#fff" : theme.colors.primary },
+                  styles.editButton,
+                  isEditMode && { backgroundColor: theme.colors.primary },
                 ]}
+                onPress={() => setIsEditMode(!isEditMode)}
               >
-                {isEditMode ? "Готово" : "Изменить"}
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.editButtonText,
+                    { color: isEditMode ? "#fff" : theme.colors.primary },
+                  ]}
+                >
+                  {isEditMode ? "Готово" : "Изменить"}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.placeholder} />
+            )}
           </View>
         </SafeAreaView>
       </View>
@@ -829,7 +1169,10 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={[styles.tabsContainer, { backgroundColor: theme.colors.surface }]}
+        style={[
+          styles.tabsContainer,
+          { backgroundColor: theme.colors.surface },
+        ]}
         contentContainerStyle={styles.tabsContent}
       >
         {CATEGORIES.map((category) => (
@@ -838,7 +1181,9 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
             style={[
               styles.tab,
               activeCategory === category.key && styles.activeTab,
-              activeCategory === category.key && { backgroundColor: theme.colors.primary },
+              activeCategory === category.key && {
+                backgroundColor: theme.colors.primary,
+              },
               { borderColor: theme.colors.border },
             ]}
             onPress={() => setActiveCategory(category.key)}
@@ -846,7 +1191,12 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
             <Text
               style={[
                 styles.tabText,
-                { color: activeCategory === category.key ? "#fff" : theme.colors.text },
+                {
+                  color:
+                    activeCategory === category.key
+                      ? "#fff"
+                      : theme.colors.text,
+                },
               ]}
             >
               {category.title}
@@ -856,8 +1206,13 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
       </ScrollView>
 
       {/* Подсказка режима редактирования */}
-      {isEditMode && (
-        <View style={[styles.editHint, { backgroundColor: theme.colors.primary + "20" }]}>
+      {effectiveEditMode && (
+        <View
+          style={[
+            styles.editHint,
+            { backgroundColor: theme.colors.primary + "20" },
+          ]}
+        >
           <Text style={[styles.editHintText, { color: theme.colors.primary }]}>
             Нажмите на цену для редактирования
           </Text>
@@ -884,14 +1239,24 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
           style={styles.modalOverlay}
         >
           <KeyboardDismissBackdrop />
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
               Изменить цену
             </Text>
-            <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
+            <Text
+              style={[
+                styles.modalSubtitle,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
               {editingItem?.itemName}
             </Text>
-            
+
             <TextInput
               style={[
                 styles.modalInput,
@@ -911,16 +1276,26 @@ const PriceScreen: React.FC<Props> = ({ navigation }) => {
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton, { borderColor: theme.colors.border }]}
+                style={[
+                  styles.modalButton,
+                  styles.cancelButton,
+                  { borderColor: theme.colors.border },
+                ]}
                 onPress={() => setEditModalVisible(false)}
                 disabled={isSaving}
               >
-                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>
+                <Text
+                  style={[styles.modalButtonText, { color: theme.colors.text }]}
+                >
                   Отмена
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton, { backgroundColor: theme.colors.primary }]}
+                style={[
+                  styles.modalButton,
+                  styles.saveButton,
+                  { backgroundColor: theme.colors.primary },
+                ]}
                 onPress={saveEdit}
                 disabled={isSaving}
               >
@@ -1023,6 +1398,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
     fontStyle: "italic",
+  },
+  viewOnlyBanner: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  viewOnlyText: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
   },
   content: {
     flex: 1,

@@ -57,7 +57,7 @@ const HomeScreen: React.FC<Props> = ({ navigation }) => {
             />
           </View>
           <Text style={[styles.appTitle, { color: theme.colors.text }]}>
-            Н.О.С
+            Н.О.С.
           </Text>
           <Text style={[styles.appSubtitle, { color: theme.colors.textSecondary }]}>
             Калькулятор окон
