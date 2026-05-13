@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Н.О.С.",
+    "name": "wnd_nos",
     "slug": "wndnos",
     "version": "1.0.0",
     "orientation": "default",
@@ -24,6 +24,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.wndnos.maduroh77",
       "infoPlist": {
+        "CFBundleDisplayName": "Н.О.С.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -52,7 +53,8 @@
           "defaultChannel": "default"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "./plugins/with-display-name"
     ],
     "extra": {
       "eas": {
